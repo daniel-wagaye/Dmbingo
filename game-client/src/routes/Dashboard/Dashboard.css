@@ -1,0 +1,496 @@
+/* ===== Dashboard Layout ===== */
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 16px 100px;
+  gap: 14px;
+  max-width: 480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ===== Glass Card Base ===== */
+.glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(35, 42, 59, 0.75) 0%,
+    rgba(44, 53, 72, 0.55) 100%
+  );
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glass-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== Glass Pill (buttons) ===== */
+.glass-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(35, 42, 59, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.glass-pill:hover {
+  background: rgba(35, 42, 59, 0.85);
+}
+
+.glass-pill:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ===== Header ===== */
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.dash-logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: #00f2ff;
+  text-shadow: 0 0 18px rgba(0, 242, 255, 0.45);
+  letter-spacing: -0.5px;
+}
+
+.dash-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-toggle {
+  min-width: 64px;
+  font-size: 11px;
+}
+
+.invite-btn {
+  border-color: rgba(255, 140, 0, 0.5);
+  color: #ff8c00;
+}
+
+.invite-btn:hover {
+  border-color: rgba(255, 140, 0, 0.8);
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.2);
+}
+
+/* ===== Profile & Wallet Box ===== */
+.profile-box {
+  padding: 18px 16px 14px;
+}
+
+.profile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.greeting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.greeting-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.edit-name-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-name-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-text);
+}
+
+.history-btn {
+  font-size: 11px;
+  padding: 5px 10px;
+}
+
+.history-btn svg {
+  flex-shrink: 0;
+}
+
+/* Balance Center */
+.balance-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 0 16px;
+}
+
+.wallet-icon {
+  flex-shrink: 0;
+}
+
+.balance-amount {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.balance-currency {
+  font-size: 14px;
+  font-weight: 600;
+  color: #00f2ff;
+  align-self: flex-end;
+  margin-bottom: 3px;
+}
+
+/* Wallet Split */
+.wallet-split {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wallet-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.wallet-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.wallet-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wallet-green .wallet-label,
+.wallet-green .wallet-value {
+  color: #22c55e;
+}
+
+.wallet-orange .wallet-label,
+.wallet-orange .wallet-value {
+  color: #ff8c00;
+}
+
+/* ===== Claim Box ===== */
+.claim-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.claim-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.claim-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+
+/* ===== Primary Button ===== */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #ff8c00;
+  color: #fff;
+  font-family: var(--font);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 16px rgba(255, 140, 0, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Ghost Button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ===== 2x2 Navigation Grid ===== */
+.nav-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.nav-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 22px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-family: var(--font);
+}
+
+.nav-card span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.nav-card:hover {
+  border-color: rgba(0, 242, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.08);
+}
+
+.nav-card:active {
+  transform: scale(0.97);
+}
+
+/* ===== Fixed Play Button ===== */
+.play-btn {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 75px;
+  height: 75px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6b00 100%);
+  box-shadow:
+    0 4px 24px rgba(255, 140, 0, 0.45),
+    0 0 40px rgba(255, 140, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 50;
+}
+
+.play-btn:hover {
+  box-shadow:
+    0 6px 32px rgba(255, 140, 0, 0.55),
+    0 0 50px rgba(255, 140, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.play-btn:active {
+  transform: translateX(-50%) scale(0.95);
+}
+
+.play-btn svg {
+  margin-left: 3px;
+}
+
+/* ===== Small Spinner ===== */
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ===== Modal Overlay ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+/* ===== Modal Glass ===== */
+.modal-glass {
+  width: 100%;
+  max-width: 340px;
+  background: linear-gradient(
+    135deg,
+    rgba(35, 42, 59, 0.88) 0%,
+    rgba(44, 53, 72, 0.78) 100%
+  );
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.modal-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 16px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.modal-input:focus {
+  border-color: rgba(0, 242, 255, 0.4);
+}
+
+.modal-input:disabled {
+  opacity: 0.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.modal-actions .btn-primary {
+  padding: 8px 22px;
+  font-size: 13px;
+  min-width: 80px;
+}
+
+/* ===== Play Button Wrapper (excluded from navigating lock) ===== */
+.play-button-wrapper {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.play-button-wrapper .play-btn {
+  position: static;
+  transform: none;
+}
+
+.play-button-wrapper .play-btn:hover {
+  transform: scale(1.05);
+}
+
+.play-button-wrapper .play-btn:active {
+  transform: scale(0.95);
+}
+
+/* ===== Dashboard Navigating Lock ===== */
+.dashboard-navigating > *:not(.play-button-wrapper) {
+  pointer-events: none;
+}

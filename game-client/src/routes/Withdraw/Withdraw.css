@@ -1,0 +1,82 @@
+/* ===== Withdraw Modal ===== */
+.withdraw-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  background: linear-gradient(135deg, rgba(35, 42, 59, 0.92), rgba(44, 53, 72, 0.85));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+}
+
+.withdraw-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.withdraw-modal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.withdraw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.withdraw-balance-row {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.withdraw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.withdraw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.withdraw-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.withdraw-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a94a6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.withdraw-submit-btn {
+  margin: 4px 16px 16px;
+  padding: 12px;
+  font-size: 14px;
+  width: calc(100% - 32px);
+}

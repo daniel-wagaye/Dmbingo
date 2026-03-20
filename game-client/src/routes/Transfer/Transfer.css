@@ -1,0 +1,104 @@
+/* ===== Transfer Modal ===== */
+.transfer-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  background: linear-gradient(135deg, rgba(35, 42, 59, 0.92), rgba(44, 53, 72, 0.85));
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+}
+
+.transfer-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+.transfer-modal > * {
+  position: relative;
+  z-index: 1;
+}
+
+.transfer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Wallet grid */
+.transfer-wallets {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.transfer-wallet-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.tw-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tw-value {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tw-green .tw-label,
+.tw-green .tw-value {
+  color: #22c55e;
+}
+
+.tw-orange .tw-label,
+.tw-orange .tw-value {
+  color: #ff8c00;
+}
+
+/* Form */
+.transfer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 14px;
+}
+
+.transfer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transfer-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.transfer-submit-btn {
+  margin: 4px 16px 16px;
+  padding: 12px;
+  font-size: 14px;
+  width: calc(100% - 32px);
+}

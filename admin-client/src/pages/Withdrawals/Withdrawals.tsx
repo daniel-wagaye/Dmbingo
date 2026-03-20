@@ -1,0 +1,378 @@
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import {
+  approveWithdrawal,
+  declineWithdrawal,
+  fetchWithdrawals,
+} from '../../services/withdrawalService';
+
+type WithdrawalRow = {
+  withdrawal_id: number;
+  telegram_id: number;
+  first_name: string | null;
+  amount: string;
+  bank: string;
+  account_holder: string | null;
+  account_num: string | null;
+  status: string;
+  created_at: string;
+  processed_at: string | null;
+};
+
+type ViewMode = 'pending' | 'history';
+
+const formatNumber = (value: string | number) =>
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value ?? 0));
+
+const Withdrawals = ({ mode }: { mode: ViewMode }) => {
+  const [rows, setRows] = useState<WithdrawalRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [selected, setSelected] = useState<WithdrawalRow | null>(null);
+  const [actionPassword, setActionPassword] = useState('');
+  const [adminTxNumber, setAdminTxNumber] = useState('');
+  const [declineReason, setDeclineReason] = useState<'incorrect' | 'bank' | ''>('');
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const columns = useMemo(
+    () => [
+      { key: 'withdrawal_id', label: 'Withdrawal ID' },
+      { key: 'telegram_id', label: 'Telegram ID' },
+      { key: 'first_name', label: 'First Name' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'bank', label: 'Bank' },
+      { key: 'account_holder', label: 'Account Holder' },
+      { key: 'account_num', label: 'Account Number' },
+      { key: 'status', label: 'Status' },
+      { key: 'created_at', label: 'Created At' },
+    ],
+    []
+  );
+
+  const loadWithdrawals = async (nextPage = page) => {
+    setLoading(true);
+    try {
+      const data = await fetchWithdrawals({ page: nextPage, status: mode });
+      setRows(data.data);
+      setPage(data.page);
+      setTotalPages(data.totalPages);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to load withdrawals';
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWithdrawals(1);
+  }, [mode]);
+
+  const openApprove = (row: WithdrawalRow) => {
+    setSelected(row);
+    setActionPassword('');
+    setAdminTxNumber('');
+    setApproveOpen(true);
+  };
+
+  const openDecline = (row: WithdrawalRow) => {
+    setSelected(row);
+    setActionPassword('');
+    setDeclineReason('');
+    setDeclineOpen(true);
+  };
+
+  const closeModals = () => {
+    setApproveOpen(false);
+    setDeclineOpen(false);
+  };
+
+  const submitApprove = async () => {
+    if (!selected) return;
+    if (!actionPassword.trim()) {
+      toast.error('Enter action password.');
+      return;
+    }
+    if (adminTxNumber.trim().length < 9 || adminTxNumber.trim().length > 21) {
+      toast.error('Admin transaction number must be 9–21 characters.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await approveWithdrawal({
+        withdrawalId: selected.withdrawal_id,
+        actionPassword,
+        adminTxNumber: adminTxNumber.trim(),
+      });
+      toast.success('Withdrawal approved.');
+      closeModals();
+      loadWithdrawals(page);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Approve failed';
+      toast.error(
+        message === 'invalid_action_password' ? 'Incorrect action password.' : message
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const submitDecline = async () => {
+    if (!selected) return;
+    if (!actionPassword.trim()) {
+      toast.error('Enter action password.');
+      return;
+    }
+    if (!declineReason) {
+      toast.error('Select decline reason.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await declineWithdrawal({
+        withdrawalId: selected.withdrawal_id,
+        actionPassword,
+        reason: declineReason,
+      });
+      toast.success('Withdrawal declined.');
+      closeModals();
+      loadWithdrawals(page);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Decline failed';
+      toast.error(
+        message === 'invalid_action_password' ? 'Incorrect action password.' : message
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <div className="withdrawals-page">
+      <div className="withdrawals-header">
+        <div>
+          <h1>Withdrawals</h1>
+          <p className="withdrawals-subtitle">
+            {mode === 'pending' ? 'Pending withdrawals' : 'Approved & declined history'}
+          </p>
+        </div>
+        <div className="withdrawals-tabs">
+          <a
+            className={`tab-link${mode === 'pending' ? ' active' : ''}`}
+            href="/admin/withdrawals/pending"
+          >
+            Pending
+          </a>
+          <a
+            className={`tab-link${mode === 'history' ? ' active' : ''}`}
+            href="/admin/withdrawals/approved"
+          >
+            Approved
+          </a>
+        </div>
+      </div>
+
+      <div className="withdrawals-table-wrapper">
+        <table className="withdrawals-table">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column.key}>{column.label}</th>
+              ))}
+              <th>{mode === 'pending' ? 'Actions' : 'Processed At'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={columns.length + 1} className="withdrawals-empty">
+                  Loading...
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + 1} className="withdrawals-empty">
+                  No withdrawals found.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.withdrawal_id}>
+                  <td>{row.withdrawal_id}</td>
+                  <td>{row.telegram_id}</td>
+                  <td>{row.first_name ?? '-'}</td>
+                  <td>{formatNumber(row.amount)}</td>
+                  <td>{row.bank}</td>
+                  <td>{row.account_holder ?? '-'}</td>
+                  <td>{row.account_num ?? '-'}</td>
+                  <td className={`status-pill ${row.status.toLowerCase()}`}>{row.status}</td>
+                  <td>{new Date(row.created_at).toLocaleString()}</td>
+                  <td>
+                    {mode === 'pending' ? (
+                      <div className="action-stack">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => openDecline(row)}
+                        >
+                          Decline
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => openApprove(row)}
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    ) : row.processed_at ? (
+                      new Date(row.processed_at).toLocaleString()
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="pagination">
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => loadWithdrawals(Math.max(page - 1, 1))}
+          disabled={page <= 1 || loading}
+        >
+          Previous
+        </button>
+        <span className="pagination-info">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => loadWithdrawals(Math.min(page + 1, totalPages))}
+          disabled={page >= totalPages || loading}
+        >
+          Next
+        </button>
+      </div>
+
+      {approveOpen && selected ? (
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h3>Approve Withdrawal</h3>
+              <button type="button" className="icon-button" onClick={closeModals} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-field">
+                <label htmlFor="withdrawPassword">Action Password</label>
+                <input
+                  id="withdrawPassword"
+                  type="password"
+                  value={actionPassword}
+                  onChange={(event) => setActionPassword(event.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label htmlFor="adminTxNumber">Admin Tx Number</label>
+                <input
+                  id="adminTxNumber"
+                  type="text"
+                  value={adminTxNumber}
+                  onChange={(event) => setAdminTxNumber(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={closeModals}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={submitApprove}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Processing...' : 'Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {declineOpen && selected ? (
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h3>Decline Withdrawal</h3>
+              <button type="button" className="icon-button" onClick={closeModals} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-field">
+                <label htmlFor="declinePassword">Action Password</label>
+                <input
+                  id="declinePassword"
+                  type="password"
+                  value={actionPassword}
+                  onChange={(event) => setActionPassword(event.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label>Reason</label>
+                <div className="radio-group">
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="declineReason"
+                      value="incorrect"
+                      checked={declineReason === 'incorrect'}
+                      onChange={() => setDeclineReason('incorrect')}
+                    />
+                    Incorrect
+                  </label>
+                  <label className="radio-option">
+                    <input
+                      type="radio"
+                      name="declineReason"
+                      value="bank"
+                      checked={declineReason === 'bank'}
+                      onChange={() => setDeclineReason('bank')}
+                    />
+                    Bank
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={closeModals}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={submitDecline}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Processing...' : 'Decline'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+export default Withdrawals;
