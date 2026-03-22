@@ -1,4 +1,4 @@
-import { config } from '../config/env';
+import { config } from '../../config';
 import type { WithdrawalRow } from '../types';
 import { escapeHtml, formatDateTime } from '../utils';
 

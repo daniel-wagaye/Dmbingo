@@ -1,7 +1,6 @@
 import { timingSafeEqual } from 'crypto';
-import type { NextFunction, Response } from 'express';
-import { config } from '../config/env';
-import type { RawBodyRequest } from '../types';
+import type { NextFunction, Request, Response } from 'express';
+import { config } from '../../config';
 
 const timingSafeEquals = (left: string, right: string): boolean => {
   const leftBuffer = Buffer.from(left);
@@ -12,7 +11,7 @@ const timingSafeEquals = (left: string, right: string): boolean => {
   return timingSafeEqual(leftBuffer, rightBuffer);
 };
 
-export const webhookAuth = (req: RawBodyRequest, res: Response, next: NextFunction): void => {
+export const webhookAuth = (req: Request, res: Response, next: NextFunction): void => {
   const passKey = req.header('pass-key');
   if (passKey && timingSafeEquals(passKey, config.webhookPassKey)) {
     next();

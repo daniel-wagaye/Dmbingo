@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { config } from '../config/env';
+import { config } from '../../config';
 import { WithdrawalsRepository } from '../db/withdrawalsRepository';
 import type { WithdrawalRow } from '../types';
 import { sleep } from '../utils';
@@ -10,15 +10,13 @@ const withinEditableWindow = (createdAt: Date): boolean =>
   createdAt.getTime() >= Date.now() - 47 * 60 * 60 * 1000;
 
 export class WithdrawalWorker {
-  private readonly pool: Pool;
   private readonly repository: WithdrawalsRepository;
   private readonly telegramClient: TelegramClient;
   private createdWakePending = false;
   private updatedWakePending = false;
   private running = false;
 
-  constructor(pool: Pool) {
-    this.pool = pool;
+  constructor(private readonly pool: Pool) {
     this.repository = new WithdrawalsRepository(pool);
     this.telegramClient = new TelegramClient();
   }
@@ -90,7 +88,7 @@ export class WithdrawalWorker {
           } catch (error) {
             await this.repository.markTransientFailure(
               row.withdrawal_id,
-              error instanceof Error ? error.message : 'Unknown Telegram error',
+              error instanceof Error ? error.message : 'Unknown Telegram error'
             );
           }
           await sleep(config.sendGapMs);
@@ -124,27 +122,20 @@ export class WithdrawalWorker {
               chatId,
               row.tg_message_id,
               buildWithdrawalMessage(row),
-              markup,
+              markup
             );
             await this.updateWithRetry(() => this.repository.markFinished(row.withdrawal_id, row.tg_message_id), row);
           } else {
             if (row.tg_message_id) {
               await this.telegramClient.deleteMessage(chatId, row.tg_message_id);
             }
-            const sent = await this.telegramClient.sendMessage(
-              chatId,
-              buildWithdrawalMessage(row, true),
-              markup,
-            );
-            await this.updateWithRetry(
-              () => this.repository.markFinished(row.withdrawal_id, sent.message_id),
-              row,
-            );
+            const sent = await this.telegramClient.sendMessage(chatId, buildWithdrawalMessage(row, true), markup);
+            await this.updateWithRetry(() => this.repository.markFinished(row.withdrawal_id, sent.message_id), row);
           }
         } catch (error) {
           await this.repository.markUpdateFailure(
             row.withdrawal_id,
-            error instanceof Error ? error.message : 'Unknown update error',
+            error instanceof Error ? error.message : 'Unknown update error'
           );
         }
         await sleep(config.sendGapMs);
@@ -155,11 +146,7 @@ export class WithdrawalWorker {
     }
   }
 
-  private async updateWithRetry(
-    updater: () => Promise<void>,
-    row: WithdrawalRow,
-    retries = 3,
-  ): Promise<void> {
+  private async updateWithRetry(updater: () => Promise<void>, row: WithdrawalRow, retries = 3): Promise<void> {
     let attempt = 0;
     while (attempt <= retries) {
       try {
@@ -169,7 +156,7 @@ export class WithdrawalWorker {
         if (attempt === retries) {
           await this.repository.markTransientFailure(
             row.withdrawal_id,
-            error instanceof Error ? error.message : 'Database update failed',
+            error instanceof Error ? error.message : 'Database update failed'
           );
           return;
         }

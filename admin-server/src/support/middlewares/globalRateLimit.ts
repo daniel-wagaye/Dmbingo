@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { config } from '../config/env';
+import { config } from '../../config';
 
 interface RateBucket {
   count: number;

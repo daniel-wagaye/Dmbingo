@@ -1,5 +1,5 @@
 import { Telegraf } from 'telegraf';
-import { config } from '../config/env';
+import { config } from '../../config';
 import { LookupRepository } from '../db/lookupRepository';
 import { SupportLookupService } from '../services/supportLookupService';
 
@@ -8,7 +8,7 @@ export class SupportLookupBot {
   private readonly lookupService: SupportLookupService;
 
   constructor(repository: LookupRepository) {
-    this.bot = new Telegraf(config.telegramBotToken);
+    this.bot = new Telegraf(config.supportBotToken);
     this.lookupService = new SupportLookupService(repository);
     this.registerHandlers();
   }

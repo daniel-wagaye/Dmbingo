@@ -1,4 +1,4 @@
-import { config } from '../config/env';
+import { config } from '../../config';
 import { sleep } from '../utils';
 
 interface TelegramEnvelope<T> {
@@ -25,7 +25,7 @@ export class TelegramClient {
   private lastApiCallAt = 0;
 
   constructor() {
-    this.baseUrl = `https://api.telegram.org/bot${config.telegramBotToken}`;
+    this.baseUrl = `https://api.telegram.org/bot${config.supportBotToken}`;
   }
 
   private async enforceGap(): Promise<void> {
@@ -66,7 +66,7 @@ export class TelegramClient {
         const retryable = response.status === 429 || response.status >= 500;
         throw new TelegramApiError(
           data.description ?? `Telegram API call failed (${response.status})`,
-          retryable,
+          retryable
         );
       } catch (error) {
         if (error instanceof TelegramApiError) {
@@ -80,7 +80,7 @@ export class TelegramClient {
         }
         throw new TelegramApiError(
           error instanceof Error ? error.message : 'Unknown network error',
-          true,
+          true
         );
       }
     }
@@ -91,7 +91,7 @@ export class TelegramClient {
   async sendMessage(
     chatId: number | string,
     text: string,
-    replyMarkup?: Record<string, unknown>,
+    replyMarkup?: Record<string, unknown>
   ): Promise<{ message_id: number }> {
     return this.callTelegram('sendMessage', {
       chat_id: chatId,
@@ -106,7 +106,7 @@ export class TelegramClient {
     chatId: number | string,
     messageId: number,
     text: string,
-    replyMarkup?: Record<string, unknown>,
+    replyMarkup?: Record<string, unknown>
   ): Promise<{ message_id: number }> {
     return this.callTelegram('editMessageText', {
       chat_id: chatId,

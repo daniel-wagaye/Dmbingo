@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { config } from '../config/env';
+import { config } from '../../config';
 
 export interface LookupUserProfile {
   telegramId: number;
@@ -120,7 +120,7 @@ export class LookupRepository {
           AND is_active = TRUE
         LIMIT 1
       `,
-      [telegramId],
+      [telegramId]
     );
     return (result.rowCount ?? 0) > 0;
   }
@@ -134,7 +134,7 @@ export class LookupRepository {
         WHERE telegram_id = $1
         LIMIT 1
       `,
-      [telegramId],
+      [telegramId]
     );
 
     if ((result.rowCount ?? 0) === 0) {
@@ -163,7 +163,7 @@ export class LookupRepository {
           ORDER BY created_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
       this.pool.query<WithdrawalHistoryRow>(
         `
@@ -173,7 +173,7 @@ export class LookupRepository {
           ORDER BY created_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
       this.pool.query<TransferHistoryRow>(
         `
@@ -188,7 +188,7 @@ export class LookupRepository {
           ORDER BY t.created_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
       this.pool.query<WinHistoryRow>(
         `
@@ -198,7 +198,7 @@ export class LookupRepository {
           ORDER BY won_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
       this.pool.query<ReferralHistoryRow>(
         `
@@ -213,7 +213,7 @@ export class LookupRepository {
           ORDER BY rh.created_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
       this.pool.query<CouponHistoryRow>(
         `
@@ -227,7 +227,7 @@ export class LookupRepository {
           ORDER BY ch.claimed_at DESC
           LIMIT $2
         `,
-        [telegramId, limit],
+        [telegramId, limit]
       ),
     ]);
 
@@ -255,8 +255,7 @@ export class LookupRepository {
       })),
       referrals: referrals.rows.map((row) => ({
         createdAt: new Date(row.created_at),
-        referredTelegramId:
-          row.referred_user_id === null ? null : Number(row.referred_user_id),
+        referredTelegramId: row.referred_user_id === null ? null : Number(row.referred_user_id),
         referredPhone: row.referred_phone ?? '-',
         rewarded: row.rewarded === true,
         rewardedAmount: Number(row.rewarded_amount ?? 0).toFixed(2),

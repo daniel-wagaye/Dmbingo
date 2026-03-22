@@ -16,13 +16,3 @@ export const formatDateTime = (value: Date | null | undefined): string => {
   const iso = date.toISOString().slice(0, 16);
   return iso.replace('T', ' ');
 };
-
-export const maskPhone = (phone: string | null | undefined): string => {
-  if (!phone) {
-    return '-';
-  }
-  if (phone.length <= 9) {
-    return `${phone.slice(0, 2)}xxxx${phone.slice(-2)}`;
-  }
-  return `${phone.slice(0, 7)}xxxx${phone.slice(-2)}`;
-};

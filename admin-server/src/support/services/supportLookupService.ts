@@ -1,4 +1,4 @@
-import { config } from '../config/env';
+import { config } from '../../config';
 import type { LookupHistory, LookupUserProfile } from '../db/lookupRepository';
 import { LookupRepository } from '../db/lookupRepository';
 import { escapeHtml, formatDateTime } from '../utils';
@@ -9,7 +9,6 @@ interface LookupLimiterBucket {
 }
 
 const lookupBuckets = new Map<number, LookupLimiterBucket>();
-
 const lookupRegex = /^\d{5,15}$/;
 
 const toSpoiler = (value: string): string => {
@@ -40,26 +39,28 @@ const renderProfile = (profile: LookupUserProfile): string[] => {
 const renderHistory = (history: LookupHistory, historyLimit: number): string[] => {
   const depositRows = history.deposits.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(row.status)}`,
+      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(row.status)}`
   );
   const withdrawalRows = history.withdrawals.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(row.status)} | ${escapeHtml(row.declinedReason ?? '-')}`,
+      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(
+        row.status
+      )} | ${escapeHtml(row.declinedReason ?? '-')}`
   );
   const transferRows = history.transfers.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.sign)}${escapeHtml(row.amount)} | ${toSpoiler(row.counterpartPhone)}`,
+      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.sign)}${escapeHtml(row.amount)} | ${toSpoiler(row.counterpartPhone)}`
   );
   const winRows = history.wins.map(
-    (row) => `${escapeHtml(formatDateTime(row.wonAt))} | ${escapeHtml(row.creditedAmount)}`,
+    (row) => `${escapeHtml(formatDateTime(row.wonAt))} | ${escapeHtml(row.creditedAmount)}`
   );
   const referralRows = history.referrals.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.createdAt))} | referred: ${row.referredTelegramId ?? '-'} | phone: ${toSpoiler(row.referredPhone)} | rewarded: ${row.rewarded ? 'yes' : 'no'} | amount: ${escapeHtml(row.rewardedAmount)}`,
+      `${escapeHtml(formatDateTime(row.createdAt))} | referred: ${row.referredTelegramId ?? '-'} | phone: ${toSpoiler(row.referredPhone)} | rewarded: ${row.rewarded ? 'yes' : 'no'} | amount: ${escapeHtml(row.rewardedAmount)}`
   );
   const couponRows = history.coupons.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.claimedAt))} | code: ${escapeHtml(row.couponCode)} | amount: ${escapeHtml(row.creditedAmount)} | wallet: ${escapeHtml(row.creditWallet)}`,
+      `${escapeHtml(formatDateTime(row.claimedAt))} | code: ${escapeHtml(row.couponCode)} | amount: ${escapeHtml(row.creditedAmount)} | wallet: ${escapeHtml(row.creditWallet)}`
   );
 
   return [
@@ -97,10 +98,7 @@ export class SupportLookupService {
     return false;
   }
 
-  async buildLookupResponse(
-    supportTelegramId: number,
-    targetTelegramId: number,
-  ): Promise<string | null> {
+  async buildLookupResponse(supportTelegramId: number, targetTelegramId: number): Promise<string | null> {
     const allowed = await this.repository.isSupportLookupAllowed(supportTelegramId);
     if (!allowed) {
       return null;

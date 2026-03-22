@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { config } from '../config/env';
+import { config } from '../../config';
 import type { WithdrawalWorker } from '../services/withdrawalWorker';
 
 const isAuthorized = (authorizationHeader?: string): boolean => {

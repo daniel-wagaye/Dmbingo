@@ -1,5 +1,5 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
-import { config } from '../config/env';
+import { config } from '../../config';
 import type { WithdrawalRow } from '../types';
 
 const mapWithdrawal = (row: QueryResultRow): WithdrawalRow => ({
@@ -25,10 +25,9 @@ export class WithdrawalsRepository {
   constructor(private readonly pool: Pool) {}
 
   async tryAcquireLock(client: PoolClient): Promise<boolean> {
-    const result = await client.query<{ locked: boolean }>(
-      'SELECT pg_try_advisory_lock($1) AS locked',
-      [config.advisoryLockKey],
-    );
+    const result = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1) AS locked', [
+      config.advisoryLockKey,
+    ]);
     return result.rows[0]?.locked === true;
   }
 
@@ -61,7 +60,7 @@ export class WithdrawalsRepository {
           INNER JOIN u ON u.withdrawal_id = wr.withdrawal_id
           ORDER BY wr.withdrawal_id ASC;
         `,
-        [size],
+        [size]
       );
       await client.query('COMMIT');
       return result.rows.map(mapWithdrawal);
@@ -90,7 +89,7 @@ export class WithdrawalsRepository {
           INNER JOIN c ON wr.withdrawal_id = c.withdrawal_id
           ORDER BY wr.withdrawal_id ASC;
         `,
-        [size],
+        [size]
       );
       await client.query('COMMIT');
       return result.rows.map(mapWithdrawal);
@@ -110,7 +109,7 @@ export class WithdrawalsRepository {
             last_error = NULL
         WHERE withdrawal_id = $2
       `,
-      [tgMessageId, withdrawalId],
+      [tgMessageId, withdrawalId]
     );
   }
 
@@ -125,7 +124,7 @@ export class WithdrawalsRepository {
             last_error = NULL
         WHERE withdrawal_id = $2
       `,
-      [tgMessageId, withdrawalId],
+      [tgMessageId, withdrawalId]
     );
   }
 
@@ -139,7 +138,7 @@ export class WithdrawalsRepository {
             processed_at = NOW()
         WHERE withdrawal_id = $3
       `,
-      [config.maxAttempts, errorMessage, withdrawalId],
+      [config.maxAttempts, errorMessage, withdrawalId]
     );
   }
 
@@ -153,7 +152,7 @@ export class WithdrawalsRepository {
             processed_at = NOW()
         WHERE withdrawal_id = $3
       `,
-      [config.maxAttempts, errorMessage, withdrawalId],
+      [config.maxAttempts, errorMessage, withdrawalId]
     );
   }
 
@@ -166,7 +165,7 @@ export class WithdrawalsRepository {
         ORDER BY withdrawal_id ASC
         LIMIT $1
       `,
-      [limit],
+      [limit]
     );
     return result.rows.map(mapWithdrawal);
   }
@@ -179,7 +178,7 @@ export class WithdrawalsRepository {
         WHERE text_status = 'processing'
           AND processed_at < NOW() - ($1::int * INTERVAL '1 minute')
       `,
-      [config.processingStaleMinutes],
+      [config.processingStaleMinutes]
     );
     return result.rowCount ?? 0;
   }
@@ -192,7 +191,7 @@ export class WithdrawalsRepository {
         WHERE is_active = TRUE
         ORDER BY support_id ASC
         LIMIT 1
-      `,
+      `
     );
     if (!result.rowCount || result.rowCount === 0) {
       return null;
