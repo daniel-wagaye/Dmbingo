@@ -6,4 +6,3 @@ This repository contains the DM Bingo application stack:
 - `game-client`
 - `admin-server`
 - `admin-client`
-- `dmbingo-support-bot`
