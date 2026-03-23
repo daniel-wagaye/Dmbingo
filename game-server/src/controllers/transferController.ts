@@ -160,7 +160,11 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
 
       bot.telegram.sendMessage(
         recipientId,
-        `You have received ${amountNum} ETB from ${senderName} to your ${walletType} wallet. Your total wallet is: ${totalWallet} ETB.`
+        `እንኳን ደስ አለዎት! 🎉 \nከ${senderName} የ${amountNum} ብር ገቢ ወደ ${walletType} ዋሌትዎ ገቢ ሆኗል። 💰\nጠቅላላ የዋሌትዎ ቀሪ ሂሳብ፡ ${totalWallet} ብር.`,
+        {
+          // This ID triggers "Heart" (❤️) effect in Telegram
+          message_effect_id: "5159385139981059251"
+        } as any
       ).catch((e) => console.error('[transfer] telegram msg failed:', e));
     }
   } catch (err) {

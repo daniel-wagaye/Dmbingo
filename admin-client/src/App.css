@@ -1175,6 +1175,36 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.decline-reason-cell {
+  position: relative;
+  min-width: 140px;
+}
+
+.decline-reason-trigger {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.decline-reason-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 8;
+  max-width: 280px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: var(--panel-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  white-space: normal;
+  word-break: break-word;
+}
+
 .withdrawals-empty {
   text-align: center;
   color: var(--muted);

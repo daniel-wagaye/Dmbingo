@@ -50,9 +50,14 @@ export const config = {
   recoveryJobIntervalMs: getNumber('RECOVERY_JOB_INTERVAL_MS', 60000),
   telegramApiMaxRetries: getNumber('TELEGRAM_API_MAX_RETRIES', 5),
   telegramRetryBaseDelayMs: getNumber('TELEGRAM_RETRY_BASE_DELAY_MS', 500),
+  dbMaxConnections: getNumber('DB_MAX_CONNECTIONS', 4),
+  dbIdleTimeoutMs: getNumber('DB_IDLE_TIMEOUT_MS', 10000),
+  dbConnectionTimeoutMs: getNumber('DB_CONNECTION_TIMEOUT_MS', 5000),
+  dbQueryMaxRetries: getNumber('DB_QUERY_MAX_RETRIES', 5),
+  dbRetryBaseDelayMs: getNumber('DB_RETRY_BASE_DELAY_MS', 150),
   adminViewBaseUrl: getEnv(
     'ADMIN_VIEW_BASE_URL',
-    'https://admin.dmbingo.app/withdrawals/{withdrawal_id}'
+    'https://admin.dmbingo.app/withdrawals'
   ),
   monitoringBearerToken: getEnv('MONITORING_BEARER_TOKEN', ''),
   lookupWindowMs: getNumber('LOOKUP_WINDOW_MS', 60000),
@@ -61,6 +66,7 @@ export const config = {
   gameServerUrl: getEnv('GAME_SERVER_URL'),
   gameServerSecret: getEnv('GAME_SERVER_SECRET'),
   regexWakeupUrl: getEnv('REGEX_WAKEUP_URL', 'https://deposit-acceptor.onrender.com/internal/regex-wakeup'),
+  startCommandPhotoId: getEnv('START_COMMAND_PHOTO_ID'),
   accessTokenTtl: '15m' as const,
   refreshTokenTtl: '1d' as const,
   otpResendCooldownSeconds: 60,

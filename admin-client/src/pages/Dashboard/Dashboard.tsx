@@ -8,6 +8,7 @@ type DashboardSummary = {
     totalDeposits: number;
     totalWithdrawals: number;
     totalTransferCommissionProfit: number;
+    totalGameProfit: number;
     totalProfit: number;
   };
   monthly: {
@@ -30,9 +31,15 @@ type StatKey =
   | 'total_deposits'
   | 'total_withdrawals'
   | 'total_transfer_commission_profit'
+  | 'total_game_profit'
   | 'total_profit';
 
 const API_BASE = import.meta.env.VITE_ADMIN_API_URL ?? 'http://localhost:4000';
+
+const toFiniteNumber = (value: unknown) => {
+  const numericValue = Number(value ?? 0);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+};
 
 const formatNumber = (value: number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value);
@@ -44,6 +51,7 @@ const defaultSummary: DashboardSummary = {
     totalDeposits: 0,
     totalWithdrawals: 0,
     totalTransferCommissionProfit: 0,
+    totalGameProfit: 0,
     totalProfit: 0,
   },
   monthly: {
@@ -52,6 +60,29 @@ const defaultSummary: DashboardSummary = {
     thisMonthProfit: 0,
     pendingWithdrawals: 0,
   },
+};
+
+const coerceSummary = (data: unknown): DashboardSummary => {
+  const source = (data ?? {}) as Record<string, unknown>;
+  const totals = (source.totals ?? {}) as Record<string, unknown>;
+  const monthly = (source.monthly ?? {}) as Record<string, unknown>;
+  return {
+    totals: {
+      totalPlayers: toFiniteNumber(totals.totalPlayers),
+      totalPlayedGames: toFiniteNumber(totals.totalPlayedGames),
+      totalDeposits: toFiniteNumber(totals.totalDeposits),
+      totalWithdrawals: toFiniteNumber(totals.totalWithdrawals),
+      totalTransferCommissionProfit: toFiniteNumber(totals.totalTransferCommissionProfit),
+      totalGameProfit: toFiniteNumber(totals.totalGameProfit ?? totals.total_game_profit),
+      totalProfit: toFiniteNumber(totals.totalProfit),
+    },
+    monthly: {
+      thisMonthWithdrawals: toFiniteNumber(monthly.thisMonthWithdrawals),
+      thisMonthDeposits: toFiniteNumber(monthly.thisMonthDeposits),
+      thisMonthProfit: toFiniteNumber(monthly.thisMonthProfit),
+      pendingWithdrawals: toFiniteNumber(monthly.pendingWithdrawals),
+    },
+  };
 };
 
 const fetchSummary = async () => {
@@ -64,7 +95,7 @@ const fetchSummary = async () => {
   if (!response.ok) {
     throw new Error(data.error ?? 'Failed to load dashboard');
   }
-  return data;
+  return coerceSummary(data);
 };
 
 const fetchFilteredStat = async (statKey: StatKey, startDate: string, endDate: string) => {
@@ -79,7 +110,7 @@ const fetchFilteredStat = async (statKey: StatKey, startDate: string, endDate: s
   if (!response.ok) {
     throw new Error(data.error ?? 'Failed to load filtered stat');
   }
-  return data.value ?? 0;
+  return toFiniteNumber(data.value);
 };
 
 type ModalState = {
@@ -90,9 +121,30 @@ type ModalState = {
   updateCardOnSuccess: boolean;
 };
 
+const fetchStartCommand = async (): Promise<boolean> => {
+  const response = await fetch(`${API_BASE}/admin/start-command`, { credentials: 'include' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? 'Failed to load');
+  return !!data.enabled;
+};
+
+const toggleStartCommand = async (enabled: boolean): Promise<boolean> => {
+  const response = await fetch(`${API_BASE}/admin/start-command`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error ?? 'Failed to update');
+  return !!data.enabled;
+};
+
 const Dashboard = () => {
   const [summary, setSummary] = useState<DashboardSummary>(defaultSummary);
   const [loading, setLoading] = useState(false);
+  const [startCmdEnabled, setStartCmdEnabled] = useState(false);
+  const [startCmdLoading, setStartCmdLoading] = useState(false);
   const [modal, setModal] = useState<ModalState>({
     open: false,
     statKey: null,
@@ -111,15 +163,33 @@ const Dashboard = () => {
 
   useEffect(() => {
     setLoading(true);
-    fetchSummary()
-      .then((data) => {
+    Promise.all([
+      fetchSummary(),
+      fetchStartCommand().catch(() => false),
+    ])
+      .then(([data, cmdEnabled]) => {
         setSummary(data);
+        setStartCmdEnabled(cmdEnabled);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : 'Failed to load dashboard');
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const handleStartCmdToggle = async () => {
+    if (startCmdLoading) return;
+    setStartCmdLoading(true);
+    try {
+      const newValue = await toggleStartCommand(!startCmdEnabled);
+      setStartCmdEnabled(newValue);
+      toast.success(newValue ? 'Start command enabled' : 'Start command disabled');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to toggle');
+    } finally {
+      setStartCmdLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!modal.open) return;
@@ -169,6 +239,11 @@ const Dashboard = () => {
         label: 'Total Transfer Commission Profit',
         value: summary.totals.totalTransferCommissionProfit,
         statKey: 'total_transfer_commission_profit',
+      },
+      {
+        label: 'Tootal Game Profit',
+        value: summary.totals.totalGameProfit,
+        statKey: 'total_game_profit',
       },
       { label: 'Total Profit', value: summary.totals.totalProfit, statKey: 'total_profit' },
     ],
@@ -243,6 +318,9 @@ const Dashboard = () => {
             case 'total_transfer_commission_profit':
               updated.totals.totalTransferCommissionProfit = value;
               break;
+            case 'total_game_profit':
+              updated.totals.totalGameProfit = value;
+              break;
             case 'total_profit':
               updated.totals.totalProfit = value;
               break;
@@ -278,7 +356,38 @@ const Dashboard = () => {
           <h1>Dashboard</h1>
           <p className="dashboard-subtitle">High-level performance overview</p>
         </div>
-        <div className="dashboard-status">
+        <div className="dashboard-status" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+            <span>Start Command</span>
+            <button
+              type="button"
+              onClick={handleStartCmdToggle}
+              disabled={startCmdLoading}
+              style={{
+                width: '44px',
+                height: '24px',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: startCmdLoading ? 'wait' : 'pointer',
+                background: startCmdEnabled ? '#22c55e' : '#4b5563',
+                position: 'relative',
+                transition: 'background 0.2s',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '2px',
+                  left: startCmdEnabled ? '22px' : '2px',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  transition: 'left 0.2s',
+                }}
+              />
+            </button>
+          </label>
           {loading ? <span className="dashboard-pill">Loading...</span> : null}
         </div>
       </div>
@@ -309,21 +418,6 @@ const Dashboard = () => {
               <div className="stat-value">{formatNumber(card.value)}</div>
             </button>
           ))}
-        </div>
-      </section>
-
-      <section className="dashboard-section">
-        <h2>Growth Chart</h2>
-        <div className="chart-card">
-          <div className="chart-placeholder">
-            <div className="chart-bar" />
-            <div className="chart-bar" />
-            <div className="chart-bar" />
-            <div className="chart-bar" />
-            <div className="chart-bar" />
-            <div className="chart-bar" />
-          </div>
-          <div className="chart-caption">Trend visualization placeholder</div>
         </div>
       </section>
 

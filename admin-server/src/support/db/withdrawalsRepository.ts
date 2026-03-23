@@ -105,8 +105,7 @@ export class WithdrawalsRepository {
         UPDATE withdrawals_request
         SET tg_message_id = $1,
             text_status = 'sent',
-            attempts = 0,
-            last_error = NULL
+            attempts = 0
         WHERE withdrawal_id = $2
       `,
       [tgMessageId, withdrawalId]
@@ -120,39 +119,36 @@ export class WithdrawalsRepository {
         SET tg_message_id = COALESCE($1, tg_message_id),
             text_status = 'finished',
             attempts = 0,
-            processed_at = NOW(),
-            last_error = NULL
+            processed_at = NOW()
         WHERE withdrawal_id = $2
       `,
       [tgMessageId, withdrawalId]
     );
   }
 
-  async markTransientFailure(withdrawalId: number, errorMessage: string): Promise<void> {
+  async markTransientFailure(withdrawalId: number): Promise<void> {
     await this.pool.query(
       `
         UPDATE withdrawals_request
         SET attempts = attempts + 1,
-            text_status = CASE WHEN attempts + 1 >= $1 THEN 'failed' ELSE 'pending' END,
-            last_error = LEFT($2, 500),
+            text_status = 'pending',
             processed_at = NOW()
-        WHERE withdrawal_id = $3
+        WHERE withdrawal_id = $1
       `,
-      [config.maxAttempts, errorMessage, withdrawalId]
+      [withdrawalId]
     );
   }
 
-  async markUpdateFailure(withdrawalId: number, errorMessage: string): Promise<void> {
+  async markUpdateFailure(withdrawalId: number): Promise<void> {
     await this.pool.query(
       `
         UPDATE withdrawals_request
         SET attempts = attempts + 1,
-            text_status = CASE WHEN attempts + 1 >= $1 THEN 'failed' ELSE 'sent' END,
-            last_error = LEFT($2, 500),
+            text_status = 'sent',
             processed_at = NOW()
-        WHERE withdrawal_id = $3
+        WHERE withdrawal_id = $1
       `,
-      [config.maxAttempts, errorMessage, withdrawalId]
+      [withdrawalId]
     );
   }
 
@@ -161,11 +157,11 @@ export class WithdrawalsRepository {
       `
         SELECT *
         FROM withdrawals_request
-        WHERE text_status = 'failed'
+        WHERE attempts >= $1
         ORDER BY withdrawal_id ASC
-        LIMIT $1
+        LIMIT $2
       `,
-      [limit]
+      [config.maxAttempts, limit]
     );
     return result.rows.map(mapWithdrawal);
   }
@@ -189,7 +185,7 @@ export class WithdrawalsRepository {
         SELECT telegram_id
         FROM withdraw_message_admin
         WHERE is_active = TRUE
-        ORDER BY support_id ASC
+        ORDER BY telegram_id ASC
         LIMIT 1
       `
     );

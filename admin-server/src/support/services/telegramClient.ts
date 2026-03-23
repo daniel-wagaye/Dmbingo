@@ -1,15 +1,6 @@
 import { config } from '../../config';
+import { Telegraf } from 'telegraf';
 import { sleep } from '../utils';
-
-interface TelegramEnvelope<T> {
-  ok: boolean;
-  result?: T;
-  description?: string;
-  error_code?: number;
-  parameters?: {
-    retry_after?: number;
-  };
-}
 
 export class TelegramApiError extends Error {
   readonly retryable: boolean;
@@ -21,11 +12,11 @@ export class TelegramApiError extends Error {
 }
 
 export class TelegramClient {
-  private readonly baseUrl: string;
+  private readonly bot: Telegraf;
   private lastApiCallAt = 0;
 
   constructor() {
-    this.baseUrl = `https://api.telegram.org/bot${config.supportBotToken}`;
+    this.bot = new Telegraf(config.supportBotToken);
   }
 
   private async enforceGap(): Promise<void> {
@@ -36,41 +27,42 @@ export class TelegramClient {
     }
   }
 
+  private getRetryAfterMs(error: unknown): number {
+    const candidate = error as {
+      parameters?: { retry_after?: number };
+      response?: { parameters?: { retry_after?: number } };
+    };
+    const retryAfter = candidate.parameters?.retry_after ?? candidate.response?.parameters?.retry_after ?? 0;
+    return Math.max(0, retryAfter) * 1000;
+  }
+
+  private getTelegramStatusCode(error: unknown): number {
+    const candidate = error as {
+      code?: number;
+      statusCode?: number;
+      response?: { error_code?: number };
+    };
+    return candidate.code ?? candidate.statusCode ?? candidate.response?.error_code ?? 0;
+  }
+
   private async callTelegram<T>(method: string, payload: Record<string, unknown>): Promise<T> {
     let attempt = 0;
     while (attempt <= config.telegramApiMaxRetries) {
       await this.enforceGap();
       this.lastApiCallAt = Date.now();
       try {
-        const response = await fetch(`${this.baseUrl}/${method}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const data = (await response.json()) as TelegramEnvelope<T>;
-        if (data.ok && data.result !== undefined) {
-          return data.result;
+        return (await this.bot.telegram.callApi(method as never, payload as never)) as T;
+      } catch (error) {
+        if (error instanceof TelegramApiError) {
+          throw error;
         }
-
-        const retryAfterMs = (data.parameters?.retry_after ?? 0) * 1000;
-        if ((response.status === 429 || response.status >= 500) && attempt < config.telegramApiMaxRetries) {
+        const statusCode = this.getTelegramStatusCode(error);
+        const retryAfterMs = this.getRetryAfterMs(error);
+        if ((statusCode === 429 || statusCode >= 500) && attempt < config.telegramApiMaxRetries) {
           const backoff = config.telegramRetryBaseDelayMs * 2 ** attempt;
           await sleep(Math.max(backoff, retryAfterMs));
           attempt += 1;
           continue;
-        }
-
-        const retryable = response.status === 429 || response.status >= 500;
-        throw new TelegramApiError(
-          data.description ?? `Telegram API call failed (${response.status})`,
-          retryable
-        );
-      } catch (error) {
-        if (error instanceof TelegramApiError) {
-          throw error;
         }
         if (attempt < config.telegramApiMaxRetries) {
           const backoff = config.telegramRetryBaseDelayMs * 2 ** attempt;
@@ -78,9 +70,10 @@ export class TelegramClient {
           attempt += 1;
           continue;
         }
+        const retryable = statusCode === 429 || statusCode >= 500;
         throw new TelegramApiError(
-          error instanceof Error ? error.message : 'Unknown network error',
-          true
+          error instanceof Error ? error.message : 'Unknown Telegram error',
+          retryable
         );
       }
     }

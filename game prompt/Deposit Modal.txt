@@ -1,0 +1,101 @@
+1.1. Deposit Modal
+UI (Frontend)
+- Modal title: Deposit
+- Bank info list: render one frosted-card per bank_data row from PostgreSQL:
+  - Content: {bank_data.bank_name}: {bank_data.account_number} - {bank_data.account_holder_name}
+  - Right-side: copy button → copies account_number to clipboard and temporarily changes the copy icon to a check-mark icon for a few seconds (e.g., 2.5s) then reverts to the copy icon. (No toast for copy.)
+- Textarea placeholder:
+"Paste Full Bank SMS or Only the Transaction Number" — Users may paste either a short transaction reference or the entire SMS.
+- Button: Validate Deposit
+  - On click: disable the Validate button and show a spinner on it while awaiting backend response (prevents multiple clicks). Re-enable and remove spinner when response/error received or on network failure.
+- Toasts: use toast.error(...) and toast.success(...) exactly as specified below for validation results.
+
+Frontend behaviour / validation (on Validate Deposit click)
+1. Read input = textarea.value.trim().
+2. Immediately disable the Validate button and show spinner; this is frontend-only (prevent double-clicks).
+3. If input.length is >= 8 && <= 21 → treat input as txn_reference and call backend validation.
+4. Else if input.length > 21 && < 550 → attempt to parse SMS text to extract txn_reference using the regexes below (run parser on the pasted full SMS):
+  - Regex patterns to extract transaction reference (use exact patterns below):
+    - CBE: const CBE_RE = /https:\/\/apps\.cbe\.com\.et:100\/\?id=([A-Za-z0-9]+)/i;
+    - BOA: const BOA_RE = /trx=([A-Za-z0-9]+)/i;
+    - CBEBirr: const CBEBIRR_RE = /Txn ID ([A-Za-z0-9]+)/i;
+    - Telebirr: const TELEBIRR_RE = /transaction number is[:\s]+([A-Za-z0-9]+)/i;
+  - Parsing behaviour:
+    1. Try each regex in priority: CBE, BOA, CBEBirr, Telebirr.
+    2. If a regex matches → txn_reference = match[1] and send to backend.
+    3. If none match → parsing fails → toast.error("Invalid SMS Format"), re-enable button and remove spinner.
+5. If parse succeeds → send extracted txn_reference to backend.
+6. If input.length < 8 → toast.error("Invalid Transaction Number"), re-enable button and remove spinner.
+7. If input.length > 550 → toast.error("Invalid SMS Format"), re-enable button and remove spinner.
+8. On backend response:
+    - If success (200):
+      - Immediately close the Deposit modal
+      - Immediately refresh the dashboard (user sees new wallet balance)
+      - Then (right after modal closes) show the success toast
+      - Show toast.success(...) according to API reply
+    - If error (4xx / 5xx):
+      - Show toast.error(...) according to API reply
+      - Re-enable Validate button and remove spinner
+
+(Frontend must not attempt deposit crediting itself — only send txn_reference to backend for authoritative validation.)
+
+API contract (frontend → backend)
+- Endpoint: POST /api/deposits/validate
+- Headers (required):
+     Content-Type: application/json
+  X-Telegram-Init-Data: <raw Telegram WebApp initData string>
+- Body (JSON):
+{
+  "txn_reference": "FT25234JC66N69004293"
+}
+- Rate-limit response (if limit exceeded):
+  - 429 { "error": "RATE_LIMIT_EXCEEDED", "message": "Too many requests. Try again later." }
+- Other expected backend responses (examples):
+  - 400 { "error": "INVALID_TXN_FORMAT", "message": "Invalid SMS Format" }
+  - 404 { "error": "DEPOSIT_NOT_FOUND", "message": "The Deposit Does Not Exist" }
+  - 409 { "error": "ALREADY_PROCESSED", "message": "Deposit already processed." }
+  - 409 { "error": "REJECTED", "message": "Deposit is Rejected! \\n please reach out to our customers if you think this is a mistake" }
+  - 200 { "success": true, "amount": 5.00, "message": "Your deposit is successfully  APPROVED. \\n Your wallet is credited with: \\n 5.00 ETB" }
+
+Frontend should show returned message via toast.success(...) for 200, and toast.error(...) for error codes. If 429 received, show toast.error("Too many requests. Try again later.").
+
+Backend behaviour (authoritative)
+
+1. Endpoint POST /api/deposits/validate receives the raw X-Telegram-Init-Data header and txn_reference in the body.
+2. First step (mandatory): Verify the initData HMAC signature using the bot token (as described in the Telegram WebApp docs and your existing verifyInitData middleware).
+   - If verification fails → return 401 { "error": "AUTH_FAILED", "message": "Invalid authentication data" }
+   - If successful → extract telegram_id from the verified initData.
+3. Use this extracted telegram_id for all further operations (rate limiting, user lookup, wallet credit, etc.).
+4. Rate limiting (in-memory, per-user):
+  - Maintain an in-memory Map<telegram_id, number[]> where each entry is an array of epoch-second (or ms) timestamps of recent attempts.
+  - On each request:
+    1. timestamps = map.get(telegram_id) || [].
+    2. Remove any timestamps older than 60 seconds from timestamps.
+    3. If timestamps.length >= 3 → return 429 { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Try again later.' }.
+    4. Else push now to timestamps, map.set(telegram_id, timestamps) and continue processing.
+  - This keeps the backend safe from spam and uses almost zero memory even with hundreds of concurrent players.
+  - (Note: this is an in-memory per-instance approach — suitable for single-instance or non-strict distributed setups.)
+5. Normalize txn_reference = txn_reference.trim().
+6. Begin DB transaction.
+7. Attempt to find deposit row:
+   SELECT * FROM deposits WHERE txn_reference = $1 FOR UPDATE;
+8.If no row → ROLLBACK → return 404 { error: 'DEPOSIT_NOT_FOUND', message: 'The Deposit Does Not Exist' }.
+9. If row found:
+  - If status = 'approved' → ROLLBACK → return 409 { error: 'ALREADY_PROCESSED', message: 'Deposit already processed.' }.
+  - If status = 'rejected' → ROLLBACK → return 409 { error: 'REJECTED', message: 'Deposit is Rejected! \\n please reach out to our customers if you think this is a mistake' }.
+  - If status = 'pending' → proceed:
+    - Credit user non_withdrawal_wallet by deposit.amount. Implementation:
+      1. UPDATE users SET non_withdrawal_wallet = non_withdrawal_wallet + $amount WHERE telegram_id = $telegram_id RETURNING telegram_id;
+      2. If 0 rows returned → ROLLBACK → return 400 { error: 'USER_NOT_FOUND', message: 'User does not exist' }.
+    - Mark deposit processed:
+
+UPDATE deposits
+SET status = 'approved',
+    telegram_id = $telegram_id,
+    processed_at = NOW()
+WHERE deposit_id = $deposit_id;
+
+ - Commit transaction.
+ - Return `200` `{ success: true, amount: deposit.amount, message: "Your deposit is successfully APPROVED. \\n Your wallet is credited with: \\n {amount} ETB" }`.
+
+Important: Use SELECT ... FOR UPDATE / DB transactions to avoid race conditions and double-crediting.

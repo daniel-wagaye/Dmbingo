@@ -1,6 +1,7 @@
 import { callTransitionPicking } from '../services/gameService';
 import { startCallingLoop } from './caller';
 import { activeRoom } from '../colyseus/GameRoom';
+import { withRetry } from '../utils/retry';
 
 let pickingTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -18,11 +19,13 @@ export function schedulePickingTimer(delayMs: number): void {
   pickingTimer = setTimeout(async () => {
     pickingTimer = null;
     try {
-      const result = await callTransitionPicking();
+      const result = await withRetry(() => callTransitionPicking(), 'transition_picking');
       console.log('[scheduler] transition_picking result:', result);
 
       if (!result || !result.success) {
         console.error('[scheduler] transition_picking failed:', result);
+        // Reschedule after 30s to avoid stuck state
+        schedulePickingTimer(30000);
         return;
       }
 
@@ -31,7 +34,6 @@ export function schedulePickingTimer(delayMs: number): void {
         const newDelay = newEndsAtMs - Date.now();
         console.log(`[scheduler] Extended picking — ${result.player_count}/${result.minimum_player} players. Rescheduling ${Math.round(newDelay / 1000)}s`);
 
-        // Update Colyseus room with new picking_ends_at from return value
         if (activeRoom) {
           activeRoom.setPickingEndsAt(newEndsAtMs);
         }
@@ -40,7 +42,6 @@ export function schedulePickingTimer(delayMs: number): void {
       } else if (result.action === 'started') {
         console.log(`[scheduler] Game ${result.game_id} started with ${result.player_count} players. Prize: ${result.prize_amount}`);
 
-        // Update Colyseus room to started phase using return values
         if (activeRoom) {
           activeRoom.startGame(
             result.shuffled_nums,
@@ -52,7 +53,8 @@ export function schedulePickingTimer(delayMs: number): void {
         startCallingLoop(result.game_id, result.shuffled_nums);
       }
     } catch (err) {
-      console.error('[scheduler] Error in picking transition:', err);
+      console.error('[scheduler] All retries failed for transition_picking. Rescheduling in 30s.', err);
+      schedulePickingTimer(30000);
     }
   }, delayMs);
 }

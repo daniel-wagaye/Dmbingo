@@ -1,0 +1,112 @@
+CREATE OR REPLACE FUNCTION finalize_game()
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_game           games%ROWTYPE;
+    v_winner_count   INT;
+    v_prize_cents    BIGINT;
+    v_base_cents     BIGINT;
+    v_rem_cents      INT;
+    v_share_cents    BIGINT;
+    v_share_num      NUMERIC(12,2);
+    v_winner_rec     RECORD;
+    v_result         JSONB;
+    v_i              INT := 0;
+BEGIN
+    -- 1. Lock and fetch the current (latest) game row
+    SELECT * INTO v_game
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'NO_GAME_FOUND'
+        );
+    END IF;
+
+    -- 2. Only started games can be finalized
+    IF v_game.phase != 'started' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'INVALID_PHASE',
+            'phase', v_game.phase,
+            'game_id', v_game.game_id
+        );
+    END IF;
+
+    -- 3. Count winners (NO FOR UPDATE – rows will be locked in the loop)
+    SELECT COUNT(*) INTO v_winner_count
+    FROM player_picks
+    WHERE game_id = v_game.game_id AND winner = TRUE;
+
+    -- 4. Process based on winner count
+    IF v_winner_count > 0 THEN
+        -- Convert prize to cents for exact distribution
+        v_prize_cents := (v_game.prize_amount * 100)::BIGINT;
+        v_base_cents  := v_prize_cents / v_winner_count;   -- integer division truncates
+        v_rem_cents   := v_prize_cents - v_base_cents * v_winner_count;  -- remainder 0..(v_winner_count-1)
+
+        -- Loop through winners in a deterministic order (e.g., by board_id)
+        FOR v_winner_rec IN
+            SELECT board_id, telegram_id
+            FROM player_picks
+            WHERE game_id = v_game.game_id AND winner = TRUE
+            ORDER BY board_id   -- stable order
+            FOR UPDATE          -- lock each winner row
+        LOOP
+            v_i := v_i + 1;
+            -- First v_rem_cents winners get one extra cent
+            IF v_i <= v_rem_cents THEN
+                v_share_cents := v_base_cents + 1;
+            ELSE
+                v_share_cents := v_base_cents;
+            END IF;
+
+            -- Convert cents to NUMERIC(12,2) for wallet update
+            v_share_num := (v_share_cents::NUMERIC / 100)::NUMERIC(12,2);
+
+            -- Credit the winner's withdrawal wallet
+            UPDATE users
+            SET withdrawal_wallet = withdrawal_wallet + v_share_num
+            WHERE telegram_id = v_winner_rec.telegram_id;
+
+            -- Record in winners_history
+            INSERT INTO winners_history (game_id, telegram_id, board_id, credited_amount)
+            VALUES (v_game.game_id, v_winner_rec.telegram_id, v_winner_rec.board_id, v_share_num);
+        END LOOP;
+
+        v_result := jsonb_build_object(
+            'success', true,
+            'action', 'winners_credited',
+            'game_id', v_game.game_id,
+            'winner_count', v_winner_count,
+            'prize_amount', v_game.prize_amount
+        );
+
+    ELSE
+        -- No winners → add the entire prize to the game's house_profit
+        UPDATE games
+        SET house_profit = house_profit + v_game.prize_amount
+        WHERE game_id = v_game.game_id;
+
+        v_result := jsonb_build_object(
+            'success', true,
+            'action', 'house_credited',
+            'game_id', v_game.game_id,
+            'prize_amount', v_game.prize_amount
+        );
+    END IF;
+
+    -- 5. Advance game to winner_reveal
+    UPDATE games
+    SET phase = 'winner_reveal'
+    WHERE game_id = v_game.game_id;
+
+    -- 6. Return summary
+    RETURN v_result;
+END;
+$$;

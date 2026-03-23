@@ -1,0 +1,255 @@
+users
+Stores each player.
+CREATE TABLE  users (
+    telegram_id BIGINT PRIMARY KEY,              -- Telegram unique ID
+    phone_number VARCHAR(25) UNIQUE,                   -- User phone number from telegram
+    username TEXT,                              -- Telegram @username
+    first_name TEXT,                            -- Telegram name
+    withdrawal_wallet NUMERIC(12,2) DEFAULT 0,  -- money player can withdraw
+    non_withdrawal_wallet NUMERIC(12,2) DEFAULT 0, -- non_withdrawable/only for playing game
+    referral_count INT DEFAULT 0,               -- number of referrals
+    last_referred_date TIMESTAMPTZ,
+    language TEXT CHECK (language IN ('en','am')) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+admins
+All admin credentials
+CREATE TABLE admins (
+  admin_id BIGSERIAL PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  login_password_hash TEXT NOT NULL,
+  action_password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('super_admin','withdrawal_admin')),
+  first_name TEXT,
+  last_name TEXT,
+  email_address TEXT, -- only for super admin(it helps the super admin to change their action, login and email adress by sending otp to this email)
+  is_active BOOLEAN DEFAULT TRUE,
+  failed_login_attempts SMALLINT DEFAULT 0,  -- NEW: tracks sequential failed logins; resets on success
+  locked_at TIMESTAMPTZ,                     -- NEW: timestamp when account was locked (set on lock, cleared on reactivation)
+  last_login TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ
+);
+
+deposits
+deposits validated from bank/SMS.
+CREATE TABLE deposits (
+    deposit_id       BIGSERIAL PRIMARY KEY,
+    telegram_id     BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    bank  	    TEXT,    
+    amount          NUMERIC(12,2) NOT NULL,
+    txn_reference    TEXT UNIQUE,                   -- bank transaction number
+    status          TEXT CHECK (status IN ('pending','approved','rejected'))
+                        DEFAULT 'pending',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    processed_at     TIMESTAMPTZ
+);
+
+regex_config
+CREATE TABLE regex_config (
+  id BIGSERIAL PRIMARY KEY,
+  bank_name TEXT NOT NULL UNIQUE,
+  regex_json JSONB NOT NULL,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL
+);
+
+
+withdrawals_request
+CREATE TABLE withdrawals_request (
+    withdrawal_id    BIGSERIAL PRIMARY KEY,
+    telegram_id      BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    bank    TEXT,                             -- user chosen bank
+    account_holder_name  TEXT,                -- bank account holder name user enters
+    account_num  TEXT,                     -- banck account number user enters
+    amount           NUMERIC(12,2) NOT NULL,
+    status           TEXT CHECK (status IN ('pending','approved','declined'))
+                        DEFAULT 'pending',
+    declined_reason TEXT,
+    admin_tx_number  TEXT,                           -- admin-entered bank tx number
+    admin_first_name TEXT,
+    processed_by         BIGINT REFERENCES admins(admin_id),
+    text_status               TEXT CHECK (text_status IN ('pending','processing','sent','finished')) 
+			DEFAULT 'pending', 
+    tg_message_id BIGINT,            -- store sent message id for edits or update
+    attempts INT DEFAULT 0,
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    processed_at     TIMESTAMPTZ               --  when status became approved or declined
+);
+
+bank_data
+Where users deposit money to play the game
+CREATE TABLE bank_data  (
+    id SMALLINT PRIMARY KEY,
+    bank_name TEXT,
+    account_number TEXT,
+    account_holder_name TEXT,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+
+transfer_history
+Peer-to-peer wallet transfers.
+CREATE TABLE transfer_history (
+    transfer_id    BIGSERIAL PRIMARY KEY,
+    sender_id      BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    receiver_id    BIGINT REFERENCES users(telegram_id) ON DELETE CASCADE,
+    wallet  TEXT,  -- which wallet was used during transfer
+    amount         NUMERIC(12,2) NOT NULL,
+    commission     NUMERIC(12,2) NOT NULL,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+game_config
+The game stake amount and picking phase countdown that the super admin can update.
+Only one row needed
+CREATE TABLE game_config (
+    id SMALLINT PRIMARY KEY DEFAULT 1 check(id = 1),  -- Static ID, never changes
+    stake_amount NUMERIC(12,2) NOT NULL DEFAULT 10, 
+    picking_countdown_end_time INT NOT NULL DEFAULT 30,
+    minimum_player SMALLINT NOT NULL DEFAULT 2,
+    prize_percent INT DEFAULT 80,
+    referral_amount NUMERIC(12,2) NOT NULL DEFAULT 10,
+    referral_monthly_limit INT NOT NULL DEFAULT 10,
+    registration_bonus NUMERIC(12,2) NOT NULL DEFAULT 10,
+    last_updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+games
+One row per Bingo round.
+CREATE TABLE games (
+    game_id        BIGSERIAL PRIMARY KEY,
+    phase         TEXT CHECK (phase IN ('picking','started','winner_reveal','error','maintenance','finished'))
+                       DEFAULT 'picking',
+    active_players SMALLINT DEFAULT 0,           -- total numbers of the player that picked board number
+    shuffled_nums  JSONB,         -- full shuffled 1–75 list
+    calling_started  BOOLEAN DEFAULT FALSE,
+    picking_ends_at TIMESTAMPTZ,
+    winner_reveal_ends_at TIMESTAMPTZ,
+    called_index   INTEGER NOT NULL DEFAULT 0,
+    minimum_player   SMALLINT NOT NULL,
+    stake_amount   NUMERIC(12,2) NOT NULL,
+    prize_amount   NUMERIC(12,2),            
+    house_profit   NUMERIC(12,2),              
+    started_at     TIMESTAMPTZ DEFAULT NOW(),
+    finished_at    TIMESTAMPTZ
+);
+
+player_picks
+for tracking players board number
+CREATE TABLE  player_picks (
+    board_id    SMALLINT PRIMARY KEY,            -- 1..500
+    bingo_card  JSONB NOT NULL,                   -- e.g. [[1,16,33,52,70], ...]   
+    telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    game_id     BIGINT REFERENCES games(game_id) ON DELETE SET NULL,
+    withdrawal_used    NUMERIC(12,2) NOT NULL CHECK (withdrawal_used >= 0),
+    non_withdrawal_used NUMERIC(12,2) NOT NULL CHECK (non_withdrawal_used >= 0),
+    winner     BOOLEAN DEFAULT FALSE,
+    invalid  BOOLEAN DEFAULT FALSE,
+    winner_name TEXT,
+    picked_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+Winners_history
+All winners for each game.
+CREATE TABLE winners_history (
+    id             BIGSERIAL PRIMARY KEY,
+    game_id        BIGINT REFERENCES games(game_id) ON DELETE SET NULL,
+    telegram_id    BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    board_id       SMALLINT, 
+    credited_amount   NUMERIC(12,2),  -- winner(s) total prize
+    won_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+referrals_history
+Tracks every successful referral for auditing.
+CREATE TABLE referrals_history (
+    referral_id        BIGSERIAL PRIMARY KEY,
+    referrer_id        BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    referred_user_id   BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+    rewarded BOOLEAN DEFAULT FALSE,
+    rewarded_amount    NUMERIC(12,2), -- optional ( if referrer hit the limit of game_config.referral_monthly_limit then they will not get rewarded so there is no rewarded_amount to save
+    created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+coupons
+Coupon master table
+CREATE TABLE coupons (
+  coupon_id        BIGSERIAL PRIMARY KEY,
+  coupon_code      TEXT NOT NULL UNIQUE,                  -- e.g. "WELCOME50"
+  coupon_prize     NUMERIC(12,2) NOT NULL CHECK (coupon_prize > 0),
+  credit_wallet    TEXT NOT NULL CHECK (credit_wallet IN ('withdrawal', 'non_withdrawal')),
+  max_uses_total   INT NOT NULL CHECK (max_uses_total >= 1),
+  current_uses     INT NOT NULL DEFAULT 0 CHECK (current_uses >= 0),
+  starts_at        TIMESTAMPTZ NOT NULL,
+  expires_at       TIMESTAMPTZ NOT NULL,
+  status           VARCHAR(10) NOT NULL CHECK (status IN ('active','expired','finished')) DEFAULT 'active',
+  created_by_admin BIGINT REFERENCES admins(admin_id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+coupon_history
+Coupon usage / claim history
+CREATE TABLE coupon_history (
+  claimed_id       BIGSERIAL PRIMARY KEY,
+  coupon_id        BIGINT REFERENCES coupons(coupon_id) ON DELETE SET NULL,
+  user_telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+  credited_amount  NUMERIC(12,2),
+  credit_wallet    TEXT,
+  UNIQUE (coupon_id, user_telegram_id),
+  claimed_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+support_team
+For dmbingo-support-bot
+CREATE TABLE support_admin (
+   support_id BIGSERIAL PRIMARY KEY,
+   telegram_id BIGINT UNIQUE NOT NULL,
+   is_active BOOLEAN DEFAULT TRUE,
+   created_at TIMESTAMPTZ DEFAULT NOW(),
+   updated_at TIMESTAMPTZ
+);
+
+admin_actions
+To get all audit which admin does what
+CREATE TABLE admin_actions (
+    action_id BIGSERIAL PRIMARY KEY,
+    admin_id BIGINT NOT NULL REFERENCES admins(admin_id) ON DELETE SET NULL,
+    action TEXT NOT NULL,   -- e.g., 'credit_user', 'approve_withdrawal', 'decline_withdrawal', 'delete_deposit', 'update_stake', 'login', etc.
+    target_id BIGINT,   -- optional: the user_id/withdrawal_id/deposit_id this action relates to
+    target_type TEXT,   -- e.g., 'user', 'withdrawal', 'deposit', 'game', 'admin'
+    details JSONB DEFAULT '{}'::jsonb -- extra metadata: {"amount":100,"wallet":"withdrawable","tx_number":"ABC123456"}
+    ip_address INET,            -- admin’s IP if you want for security/audit
+    user_agent TEXT,            -- optional: browser/agent
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+admin_credit_history
+track every admin credits.
+CREATE TABLE admin_credit_history (
+     credit_id BIGSERIAL PRIMARY KEY, 
+     amount NUMERIC(12,2),
+     credited_wallet TEXT, 
+     telegram_id BIGINT REFERENCES users(telegram_id) ON DELETE SET NULL,
+     created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+admin_otps
+admin_otps (store OTP metadata; OTPs hashed with HMAC-SHA256)
+CREATE TABLE admin_otps (
+  id bigserial PRIMARY KEY,
+  admin_id bigint REFERENCES admins(admin_id) ON DELETE CASCADE,
+  purpose text NOT NULL,         -- 'password_change'|'email_change_current'|'email_change_new'
+  sent_to text NOT NULL,         -- email address that received this OTP
+  otp_hash text NOT NULL,        -- HMAC-SHA256(otp + server_secret)
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  is_used boolean DEFAULT false, -- set true on successful verify
+  is_active boolean DEFAULT true,-- set false when another OTP is issued or expired
+  attempts smallint DEFAULT 0,   -- number of verify attempts
+  ip_address text,
+  user_agent text
+);

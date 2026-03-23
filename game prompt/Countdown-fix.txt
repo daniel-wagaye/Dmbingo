@@ -1,0 +1,104 @@
+Accurate Countdown Using Server Time + performance.now()
+This solution guarantees a correct countdown even if the user has manually changed their device’s time. It requires only one server round‑trip and leverages the monotonic performance.now() timer.
+
+✅ Why it works
+performance.now() is a high‑resolution, monotonic clock that is unaffected by system time changes.
+
+By capturing the server timestamp once at app start and combining it with performance.now(), we can compute an accurate estimate of the current server time at any moment:
+
+text
+estimatedServerNow = serverTimeMs + (performance.now() - perfAtFetch)
+This estimated server time is then used to calculate the remaining time until a future server timestamp (e.g., picking_ends_at).
+
+No periodic polling is needed – the countdown remains accurate even over long sessions.
+
+🧩 Implementation Steps
+1. Backend – Add serverTime to an early response
+Include the current server timestamp (milliseconds) in the response of an endpoint that is called immediately after app load – typically GET /api/user (the one that returns the user profile after Telegram verification).
+
+ts
+// Example using Express
+app.get('/api/user', async (req, res) => {
+  // 1. Verify Telegram initData, extract telegram_id
+  // 2. Fetch user from DB
+  // 3. Return user data + serverTime
+  res.json({
+    ...user,               // all your user fields
+    serverTime: Date.now() // <-- add this field
+  });
+});
+2. Frontend – Capture baseline on app start
+When your app receives the response, store the server timestamp together with the current performance.now() value. Keep this baseline accessible globally (e.g., in a React context, Zustand store, or a module‑level variable).
+
+ts
+// Inside your app initialization (after /api/user succeeds)
+let timeSync: { serverTimeMs: number; perfAtFetch: number } | null = null;
+
+async function loadUser() {
+  const res = await fetch('/api/user', {
+    headers: { 'X-Telegram-Init-Data': window.Telegram.WebApp.initData }
+  });
+  const data = await res.json();
+
+  timeSync = {
+    serverTimeMs: data.serverTime,
+    perfAtFetch: performance.now()
+  };
+
+  // ... store user data in your state management ...
+}
+3. Create a reusable useCountdown hook
+This hook computes the remaining seconds until an absolute server timestamp (e.g., picking_ends_at from game data). It updates every second.
+
+ts
+// hooks/useCountdown.ts
+import { useEffect, useState } from 'react';
+
+export function useCountdown(
+  pickingEndsAt: string | null,               // ISO string from server
+  timeSync: { serverTimeMs: number; perfAtFetch: number } | null
+) {
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!pickingEndsAt || !timeSync) return;
+
+    const endsAtMs = new Date(pickingEndsAt).getTime();
+
+    const update = () => {
+      const elapsed = performance.now() - timeSync.perfAtFetch;
+      const estimatedServerNow = timeSync.serverTimeMs + elapsed;
+      const diffMs = endsAtMs - estimatedServerNow;
+      setRemainingSeconds(Math.max(0, Math.floor(diffMs / 1000)));
+    };
+
+    update(); // initial calculation
+    const interval = setInterval(update, 1000);
+
+    return () => clearInterval(interval);
+  }, [pickingEndsAt, timeSync]); // re‑run if the game changes or timeSync updates
+
+  return remainingSeconds;
+}
+4. Use the hook in your component
+Wherever you need the countdown (e.g., the /game_picking page), pull the current game’s picking_ends_at and the globally stored timeSync.
+
+tsx
+import { useGame } from '../hooks/useGame';
+import { useTimeSync } from '../hooks/useTimeSync'; // your context/provider
+import { useCountdown } from '../hooks/useCountdown';
+
+const GamePickingPage = () => {
+  const { currentGame } = useGame();
+  const { timeSync } = useTimeSync(); // from your global state
+  const remaining = useCountdown(currentGame?.picking_ends_at, timeSync);
+
+  return (
+    <div>
+      <div className="countdown">
+        {remaining !== null ? `${remaining}s` : '--'}
+      </div>
+      {/* rest of your UI */}
+    </div>
+  );
+};

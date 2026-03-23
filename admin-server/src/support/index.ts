@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import express from 'express';
-import type { Pool } from 'pg';
 import { config } from '../config';
+import { pool } from '../db/drizzle';
 import { SupportLookupBot } from './bot/supportLookupBot';
 import { LookupRepository } from './db/lookupRepository';
 import { globalRateLimit } from './middlewares/globalRateLimit';
@@ -14,6 +14,19 @@ export interface SupportRuntime {
   bot: SupportLookupBot | null;
   recoveryTimer: NodeJS.Timeout;
 }
+
+let activeWorker: WithdrawalWorker | null = null;
+
+export const triggerWithdrawalUpdatedSync = (): void => {
+  if (!activeWorker) {
+    return;
+  }
+  try {
+    activeWorker.wakeUpdated();
+  } catch (error) {
+    process.stderr.write(`Support update wake failed: ${String(error)}\n`);
+  }
+};
 
 export const registerSupportRoutes = (app: Express, worker: WithdrawalWorker): void => {
   if (config.trustProxy) {
@@ -32,12 +45,20 @@ export const registerSupportRoutes = (app: Express, worker: WithdrawalWorker): v
   app.use(supportRouter);
 };
 
-export const startSupportRuntime = async (pool: Pool): Promise<SupportRuntime> => {
+export const startSupportRuntime = async (): Promise<SupportRuntime> => {
   const worker = new WithdrawalWorker(pool);
+  activeWorker = worker;
   const lookupRepository = new LookupRepository(pool);
   const bot = config.supportBotToken ? new SupportLookupBot(lookupRepository) : null;
   if (bot) {
-    await bot.launch();
+    void bot.launch().then(
+      () => {
+        process.stdout.write('Support lookup bot started\n');
+      },
+      (error) => {
+        process.stderr.write(`Support lookup bot failed to start: ${String(error)}\n`);
+      }
+    );
   }
   const recoveryTimer = setInterval(() => {
     void worker.runRecovery();
@@ -46,6 +67,9 @@ export const startSupportRuntime = async (pool: Pool): Promise<SupportRuntime> =
 };
 
 export const stopSupportRuntime = async (runtime: SupportRuntime, signal: string): Promise<void> => {
+  if (activeWorker === runtime.worker) {
+    activeWorker = null;
+  }
   clearInterval(runtime.recoveryTimer);
   if (runtime.bot) {
     await runtime.bot.stop(signal);

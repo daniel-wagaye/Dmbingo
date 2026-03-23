@@ -6,12 +6,70 @@ import { config } from './config';
 import app from './app';
 import { GameRoom, activeRoom } from './colyseus/GameRoom';
 import { callRecoverGameState } from './services/gameService';
+import { loadStartCommandStatus, isStartCommandEnabled } from './services/startCommandService';
 import { schedulePickingTimer } from './jobs/scheduler';
 import { startCleanupCron } from './jobs/cleanupCron';
+import { startHealthChecks } from './utils/health';
 
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
+
+// ── /start command handler (zero-cost when disabled — reads from memory) ──
+bot.command('start', async (ctx) => {
+  if (!isStartCommandEnabled()) return;
+  try {
+    const userName = ctx.from?.first_name || 'ጓደኛዬ';
+    const text = `ሰላም! ${userName} እንኳን ደህና መጡ!\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n
+    💰 የሚጠብቅዎት:\n⚡️ ፈጣን ጨዋታዎች\n🎊 ትልቅ ሽልማቶች\n🎁 ቀን በቀን ትልቅ የቦነስ ስጦታወች በዚ  ግሩፕ ላይ ይለቀቃሉ\n💬Join our community to get daily reward's 💰\n🔥 አሁኑኑ ይጀምሩ እና ያሸንፉ! 🚀`;
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
+        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }],
+      ],
+    };
+    if (config.startCommandPhotoId) {
+      await ctx.replyWithPhoto(config.startCommandPhotoId, {
+        caption: text,
+        reply_markup: keyboard,
+      });
+    } else {
+      await ctx.reply(text, { reply_markup: keyboard });
+    }
+  } catch (err) {
+    console.error('[bot] /start reply failed:', err);
+  }
+});
+
+bot.launch({ dropPendingUpdates: true }).then(
+  () => console.log('[bot] Telegram bot launched (polling)'),
+  (err) => console.error('[bot] Failed to launch:', err)
+);
 const httpServer = http.createServer(app);
+
+// ── HTTP server error resilience ──
+httpServer.on('error', (err: NodeJS.ErrnoException) => {
+  console.error('[httpServer] Error:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[httpServer] Port ${PORT} in use. Retrying in 5s...`);
+    setTimeout(() => {
+      httpServer.close();
+      httpServer.listen(PORT);
+    }, 5000);
+  }
+});
+
+httpServer.on('close', () => {
+  console.warn('[httpServer] Server closed unexpectedly. Rebinding in 3s...');
+  setTimeout(() => {
+    try {
+      httpServer.listen(PORT, () => {
+        console.log(`[httpServer] Re-bound to port ${PORT}`);
+      });
+    } catch (e) {
+      console.error('[httpServer] Rebind failed:', e);
+    }
+  }, 3000);
+});
 
 const gameServer = new ColyseusServer({
   transport: new WebSocketTransport({ server: httpServer }),
@@ -41,6 +99,9 @@ async function sendWinnerNotifications(winners: any[]): Promise<void> {
 }
 
 async function initializeAndRecover(): Promise<void> {
+  // Load start command toggle into memory (one-time DB read)
+  await loadStartCommandStatus();
+
   // Pre-create the room so activeRoom is set before any client connects
   await matchMaker.createRoom('game_room', {});
   console.log('[colyseus] Game room pre-created, activeRoom:', !!activeRoom);
@@ -108,11 +169,20 @@ async function initializeAndRecover(): Promise<void> {
   }
 }
 
+// Global safety nets — prevent unhandled errors from crashing the process
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception (process kept alive):', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection (process kept alive):', reason);
+});
+
 initializeAndRecover()
   .then(async () => {
     await gameServer.listen(PORT);
     console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
     startCleanupCron();
+    startHealthChecks();
   })
   .catch((err) => {
     console.error('[recovery] All retries failed. Exiting.', err);

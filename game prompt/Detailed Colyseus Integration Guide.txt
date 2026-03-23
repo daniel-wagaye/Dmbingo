@@ -1,0 +1,539 @@
+Detailed Colyseus Integration Guide Using PostgreSQL Functions
+
+This guide provides a step-by‑step technical implementation plan to replace Supabase Realtime with Colyseus in your DM Bingo game. The guide focuses on how to use the exact return values of these functions to keep the Colyseus room synchronised, including handling maintenance mode and real‑time updates for all players.
+
+
+1. Overview of the New Architecture
+
+Your existing Express backend will continue to serve all HTTP endpoints. Colyseus runs in the same Node.js proces, sharing the same HTTP port. It maintains a single room (`game_room`) that holds the current game state in memory. After every database transaction that affects the game, your controller updates the room’s state using the data returned by the PostgreSQL function. Colyseus then automatically broadcasts the changes (binary patches) to all connected clients.
+
+Key points:
+- No extra database queries – the PG functions already return everything needed.
+- The room’s state is a direct mirror of the current game’s phase, picking end time, called index, shuffled numbers, winner reveal end time, and all player picks (board ownership, winner/invalid flags, winner names, etc..).
+- When a new game is created (via create_next_game or recover_game_state), the room is completely reset – the picks map is cleared, and the phase is set accordingly. This ensures that no stale data from the previous game remains in memory.
+- In maintenance mode, the room’s phase is set to 'maintenance' – clients immediately see the maintenance page.
+- Timestamps are stored as Unix milliseconds (numbers) for serialisation compatibility.
+
+2. Colyseus Schema Definition
+
+Create a schema that matches the fields your game needs. Do not use `@type('date')`; store timestamps as numbers (milliseconds since epoch). The map of picks starts empty. only boards that have been picked will have an entry.
+
+colyseus/schema/GameState.ts
+typescript
+import { Schema, type, MapSchema } from '@colyseus/schema';
+
+// Represents one board (1..500) for the current game
+export class PlayerPick extends Schema {
+  @type('number') telegramId: number;      // 0 means unowned
+  @type('boolean') winner: boolean;
+  @type('boolean') invalid: boolean;
+  @type('string') winnerName: string;      // empty if not winner
+}
+
+// The complete game state
+export class GameState extends Schema {
+  @type('string') phase: string;            // 'picking', 'started', 'winner_reveal', 'maintenance'
+  @type('number') activePlayers: number;    // only relevant in started phase
+  @type(['number']) shuffledNums: number[]; // full shuffled array (1..75), empty if not started
+  @type('boolean') callingStarted: boolean; // becomes true after the 3‑second loading window
+  @type('number') pickingEndsAt: number | null; // Unix ms timestamp for countdown (null if not picking)
+  @type('number') winnerRevealEndsAt: number | null; // Unix ms timestamp for reveal countdown
+  @type('number') calledIndex: number;       // current called index (0‑75)
+  @type('number') stakeAmount: number;       // stake for the current game (displayed on picking page)
+  @type('number') prizeAmount: number | null; // prize for started/winner_reveal
+  @type({ map: PlayerPick }) picks = new MapSchema<PlayerPick>();
+}
+```
+
+---
+
+3. GameRoom Class with Stored Reference
+
+Create a room that manages the state and provides helper methods for updates. Note that timestamps are stored as numbers, so when you receive a `picking_ends_at` from a PG function (which is a Date or TIMESTAMPTZ), convert it to milliseconds using .getTime().
+
+colyseus/GameRoom.ts
+
+```typescript
+import { Room } from 'colyseus';
+import { GameState, PlayerPick } from './schema/GameState';
+
+// We'll store a reference to the active room in this module.
+// Controllers can import this variable to access the room.
+export let activeRoom: GameRoom | null = null;
+
+export class GameRoom extends Room<GameState> {
+  onCreate(options: any) {
+    this.setState(new GameState());
+    // Store the room reference globally
+    activeRoom = this;
+
+    // Optional: clean up on room disposal
+    this.onDispose(() => {
+      activeRoom = null;
+    });
+  }
+
+  // Called after crash recovery or when a new game is created.
+  // This method completely resets the state with the new game data.
+  public setNewGame(gameData: {
+    phase: string;
+    picking_ends_at?: string | null;   // ISO string from PG, or null
+    stake_amount: number;
+  }) {
+    // Reset all fields to defaults
+    this.state.phase = gameData.phase;
+    this.state.pickingEndsAt = gameData.picking_ends_at ? new Date(gameData.picking_ends_at).getTime() : null;
+    this.state.winnerRevealEndsAt = null; // new game doesn't have this
+    this.state.stakeAmount = gameData.stake_amount;
+    this.state.activePlayers = 0;
+    this.state.shuffledNums = [];
+    this.state.callingStarted = false;
+    this.state.calledIndex = 0;
+    this.state.prizeAmount = null;
+    // Clear all picks – do NOT pre‑fill 500 empty entries.
+    this.state.picks.clear();
+  }
+
+  // Update a single board after a pick/unpick/move
+  public updatePick(boardId: number, telegramId: number, winner: boolean, invalid: boolean, winnerName: string) {
+    const key = boardId.toString();
+    let pick = this.state.picks.get(key);
+    if (!pick) {
+      pick = new PlayerPick();
+      this.state.picks.set(key, pick);
+    }
+    pick.telegramId = telegramId;
+    pick.winner = winner;
+    pick.invalid = invalid;
+    pick.winnerName = winnerName;
+  }
+
+  // Update called index
+  public setCalledIndex(index: number) {
+    this.state.calledIndex = index;
+  }
+
+  // Update phase and optionally other fields (e.g., after transition_picking)
+  public setPhase(phase: string, extra?: Partial<GameState>) {
+    this.state.phase = phase;
+    if (extra) {
+      if (extra.shuffledNums !== undefined) this.state.shuffledNums = extra.shuffledNums;
+      if (extra.prizeAmount !== undefined) this.state.prizeAmount = extra.prizeAmount;
+      if (extra.activePlayers !== undefined) this.state.activePlayers = extra.activePlayers;
+      if (extra.callingStarted !== undefined) this.state.callingStarted = extra.callingStarted;
+      if (extra.winnerRevealEndsAt !== undefined) this.state.winnerRevealEndsAt = extra.winnerRevealEndsAt;
+    }
+  }
+
+  // Called when the game enters started phase to set shuffled numbers and prize
+  public startGame(shuffledNums: number[], prizeAmount: number, activePlayers: number) {
+    this.state.phase = 'started';
+    this.state.shuffledNums = shuffledNums;
+    this.state.prizeAmount = prizeAmount;
+    this.state.activePlayers = activePlayers;
+    this.state.callingStarted = false; // will become true after 3 seconds
+    this.state.calledIndex = 0;
+  }
+
+  // Called after the 3‑second loading window
+  public setCallingStarted() {
+    this.state.callingStarted = true;
+  }
+
+  // Called when winner reveal begins (after finalize_game)
+  public setWinnerReveal(endsAt: number) {
+    this.state.phase = 'winner_reveal';
+    this.state.winnerRevealEndsAt = endsAt;
+  }
+}
+```
+
+---
+
+4. Attach Colyseus to Your Express Server
+
+In your main server file (e.g., `server.ts`), attach Colyseus to the same HTTP server. The room reference will be stored automatically when the room is created.
+
+typescript
+import http from 'http';
+import express from 'express';
+import { Server as ColyseusServer } from '@colyseus/core';
+import { WebSocketTransport } from '@colyseus/ws-transport';
+import { GameRoom } from './colyseus/GameRoom';
+
+const app = express();
+const server = http.createServer(app);
+
+// ... your existing Express middleware and routes ...
+
+const gameServer = new ColyseusServer({
+  transport: new WebSocketTransport({ server })
+});
+
+// Define the room; it will be created when the first client connects.
+gameServer.define('game_room', GameRoom);
+
+export { gameServer }; // not strictly needed now, but could be useful
+
+server.listen(3000, () => {
+  console.log('Express + Colyseus running on port 3000');
+});
+
+5. Initialising the Room on Server Start (Crash Recovery)
+
+On server startup, you call `recover_game_state()`. Its return now includes:
+- `new_game_phase` (if a new game was created)
+- `picking_ends_at` (if phase is picking)
+- `stake_amount` (the stake for the new game)
+- `action`, `previous_game_id`, etc.
+
+Use these to completely reset the room. Since the room may not have been created yet (no client connected), we need to wait for the room to be created. A simple approach is to create the room manually after server start by joining a dummy client, but that's messy. Better: the room will be created when the first client connects. However, for crash recovery we need to ensure the room state is set before any client connects. We can pre‑create the room by calling `gameServer.define` and then `gameServer.matchMaker.createRoom` to create the room without a client. Let's do that.
+
+In your server startup code (after `gameServer` is defined):
+
+typescript
+import { activeRoom } from './colyseus/GameRoom';
+import { db } from './db';
+
+async function initializeGameRoom() {
+  // Ensure the room exists by creating it manually
+  await gameServer.matchMaker.createRoom('game_room', {}); // creates the room, no client
+
+  // Now activeRoom should be set
+  if (!activeRoom) {
+    console.error('Room creation failed');
+    return;
+  }
+
+  const result = await db.execute(sql`SELECT recover_game_state()`);
+  const recovery = result.rows[0].recover_game_state;
+
+  if (recovery.action === 'none' && recovery.phase) {
+    // No new game created; set the room to the current phase (e.g., maintenance)
+    activeRoom.setNewGame({
+      phase: recovery.phase,
+      picking_ends_at: null,
+      stake_amount: recovery.stake_amount || 0
+    });
+    return;
+  }
+
+  // A new game was created
+  activeRoom.setNewGame({
+    phase: recovery.new_game_phase,
+    picking_ends_at: recovery.picking_ends_at,
+    stake_amount: recovery.stake_amount
+  });
+
+  // If there were winners and you need to send Telegram messages, do that now using recovery.winners.
+}
+
+// Call after server is up but before accepting connections
+initializeGameRoom().catch(console.error);
+```
+
+**Note:** The `matchMaker.createRoom` call will trigger the room's `onCreate` method, which sets `activeRoom`. This ensures the room exists with default state, then we overwrite it with the recovered data.
+
+6. Updating the Room After Each Action
+
+In all controllers, import `activeRoom` from `./colyseus/GameRoom` and use it to update the state.
+
+ 6.1. Pick Endpoint (`POST /api/games/pick`)
+
+typescript
+import { activeRoom } from '../colyseus/GameRoom';
+
+export async function pickHandler(req, res) {
+  const { boardId } = req.body;
+  const telegramId = extractFromInitData(req);
+
+  const result = await db.execute(sql`SELECT pick_board(${telegramId}, ${boardId})`);
+  const pickResult = result.rows[0].pick_board;
+
+  if (pickResult.success) {
+    if (activeRoom) {
+      if (pickResult.action === 'pick') {
+        activeRoom.updatePick(boardId, telegramId, false, false, '');
+      } else if (pickResult.action === 'unpick') {
+        activeRoom.updatePick(boardId, 0, false, false, '');
+      } else if (pickResult.action === 'move') {
+        activeRoom.updatePick(pickResult.to, telegramId, false, false, '');
+        activeRoom.updatePick(pickResult.from, 0, false, false, '');
+      }
+    }
+    res.json({ success: true });
+  } else {
+    res.status(pickResult.status_code).json({ error: pickResult.error });
+  }
+}
+
+6.2. Claim Endpoint (`POST /api/games/claim-bingo`)
+
+`claim_bingo` returns `action: 'winner'` or `action: 'invalid'`. Only update the board if the action is exactly `'winner'` or `'invalid'`. Ignore other actions (like `'ignore'`).
+
+typescript
+export async function claimHandler(req, res) {
+  const { boardId } = req.body;
+  const telegramId = extractFromInitData(req);
+
+  const result = await db.execute(sql`SELECT claim_bingo(${boardId}, ${telegramId})`);
+  const claimResult = result.rows[0].claim_bingo;
+
+  if (claimResult.success) {
+    if (activeRoom) {
+      if (claimResult.action === 'winner') {
+        activeRoom.updatePick(boardId, telegramId, true, false, claimResult.winner_name || '');
+      } else if (claimResult.action === 'invalid') {
+        activeRoom.updatePick(boardId, telegramId, false, true, '');
+      }
+      // For any other action (e.g., 'ignore'), do nothing
+    }
+  }
+  res.json(claimResult);
+}
+```
+
+6.3. Number Calling Loop
+
+typescript
+import { activeRoom } from '../colyseus/GameRoom';
+
+// Inside your caller loop after incrementing called_index
+if (activeRoom) {
+  activeRoom.setCalledIndex(newIndex);
+}
+
+6.4. Phase Transition (Picking → Started)
+
+typescript
+const result = await db.execute(sql`SELECT transition_picking()`);
+const transition = result.rows[0].transition_picking;
+
+if (activeRoom) {
+  if (transition.action === 'extended') {
+    activeRoom.state.pickingEndsAt = new Date(transition.new_picking_ends_at).getTime();
+  } else if (transition.action === 'started') {
+    activeRoom.startGame(
+      transition.shuffled_nums,
+      transition.prize_amount,
+      transition.player_count
+    );
+  }
+}
+
+
+6.5. Finalize Game
+
+typescript
+const result = await db.execute(sql`SELECT finalize_game()`);
+const finalize = result.rows[0].finalize_game;
+
+if (activeRoom) {
+  const endsAt = Date.now() + 10000; // 10 seconds
+  activeRoom.setWinnerReveal(endsAt);
+}
+
+
+6.6. Create Next Game
+
+typescript
+const result = await db.execute(sql`SELECT create_next_game()`);
+const nextGame = result.rows[0].create_next_game;
+
+if (activeRoom) {
+  activeRoom.setNewGame({
+    phase: nextGame.phase,
+    picking_ends_at: nextGame.picking_ends_at,
+    stake_amount: nextGame.stake_amount
+  });
+}
+
+Important: The call to setNewGame clears the picks map, ensuring that no data from the previous game remains in memory. The new game starts with an empty picks map, and clients will see all boards as unowned.
+
+7. Client‑Side Changes with Exponential Backoff Reconnection
+
+7.1. Install Colyseus Client
+
+pnpm add colyseus.js
+
+7.2. Create a Service to Connect to the Room with Auto‑Reconnect
+
+services/colyseusClient.ts:
+
+typescript
+import { Client, Room } from 'colyseus.js';
+
+const client = new Client(import.meta.env.VITE_COLYSEUS_URL); // e.g., 'ws://yourdomain.com'
+
+let room: Room | null = null;
+let reconnectAttempts = 0;
+let reconnectTimeout: NodeJS.Timeout | null = null;
+
+// Exponential backoff delays: 1s, 2s, 4s, 8s, 16s, ...
+const getReconnectDelay = (attempt: number): number => {
+  return Math.min(1000 * Math.pow(2, attempt), 30000); // cap at 30 seconds
+};
+
+export async function joinGameRoom(): Promise<Room> {
+  // If already connected, return the existing room
+  if (room) return room;
+
+  try {
+    room = await client.joinOrCreate('game_room');
+    reconnectAttempts = 0; // reset on successful connection
+
+    // Set up leave handler for reconnection
+    room.onLeave(async (code) => {
+      console.log(`Left room with code ${code}. Attempting reconnect...`);
+      room = null; // clear reference
+
+      // Clear any pending reconnect timeout
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+
+      // Schedule reconnect with exponential backoff
+      const delay = getReconnectDelay(reconnectAttempts);
+      reconnectTimeout = setTimeout(async () => {
+        reconnectAttempts++;
+        await joinGameRoom(); // recursive call
+      }, delay);
+    });
+
+    return room;
+  } catch (error) {
+    console.error('Failed to join room:', error);
+    // If connection fails, also schedule a reconnect
+    const delay = getReconnectDelay(reconnectAttempts);
+    reconnectTimeout = setTimeout(async () => {
+      reconnectAttempts++;
+      await joinGameRoom();
+    }, delay);
+    throw error; // or return a rejected promise
+  }
+}
+
+export function leaveGameRoom() {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+  if (room) {
+    room.leave();
+    room = null;
+  }
+  reconnectAttempts = 0;
+}
+```
+
+7.3. Replace useRealtimeGame Hook
+
+hooks/useGameRoom.ts:
+
+typescript
+import { useEffect, useState } from 'react';
+import { joinGameRoom, leaveGameRoom } from '../services/colyseusClient';
+
+interface PlayerPick {
+  telegramId: number;
+  winner: boolean;
+  invalid: boolean;
+  winnerName: string;
+}
+
+interface GameState {
+  phase: string;
+  activePlayers: number;
+  shuffledNums: number[];
+  callingStarted: boolean;
+  pickingEndsAt: number | null;
+  winnerRevealEndsAt: number | null;
+  calledIndex: number;
+  stakeAmount: number;
+  prizeAmount: number | null;
+  picks: Record<number, PlayerPick>;
+}
+
+export function useGameRoom() {
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [picks, setPicks] = useState<Record<number, PlayerPick>>({});
+
+  useEffect(() => {
+    let room: any;
+
+    async function connect() {
+      try {
+        room = await joinGameRoom();
+        setGameState(room.state);
+        setPicks(room.state.picks);
+
+        room.onStateChange((state: any) => {
+          setGameState(state);
+          setPicks(state.picks);
+        });
+      } catch (err) {
+        // joinGameRoom already handles reconnection, so we just log
+        console.error('useGameRoom connection error:', err);
+      }
+    }
+
+    connect();
+
+    return () => {
+      leaveGameRoom();
+    };
+  }, []);
+
+  return { gameState, picks };
+}
+
+7.4. Use the Hook in Game Pages
+
+GamePicking.tsx:
+
+tsx
+const { gameState, picks } = useGameRoom();
+
+if (!gameState) return <Spinner />;
+
+const countdown = gameState.pickingEndsAt
+  ? Math.max(0, Math.floor((gameState.pickingEndsAt - Date.now()) / 1000))
+  : 0;
+
+// Render tiles: a tile is owned if picks[boardId]?.telegramId > 0
+// Use picks[boardId]?.winner, invalid etc.
+
+GameStarted.tsx:
+
+tsx
+const { gameState, picks } = useGameRoom();
+
+if (!gameState) return <Spinner />;
+
+// Render calling sheet, recent calls, etc.
+// For the BINGO button, check picks[myBoardId]?.winner, invalid, etc.
+
+Maintenance detection**: In your router or a global component, listen to `gameState.phase`. If it becomes `'maintenance'`, redirect to the maintenance page.
+
+tsx
+const { gameState } = useGameRoom();
+
+useEffect(() => {
+  if (gameState?.phase === 'maintenance') {
+    navigate('/maintenance');
+  }
+}, [gameState?.phase]);
+
+
+8. Summary of Return Values Used
+
+| Function | Returned Fields | Used in Room Update |
+|----------|------------------|---------------------|
+| `recover_game_state` | `new_game_phase`, `picking_ends_at`, `stake_amount` | `setNewGame` (phase, pickingEndsAt, stakeAmount) |
+| `create_next_game` | `phase`, `picking_ends_at`, `stake_amount` | `setNewGame` (phase, pickingEndsAt, stakeAmount) |
+| `pick_board` | `action`, `boardId`, `from`, `to` | `updatePick` for affected boards |
+| `claim_bingo` | `action`, `winner_name` | `updatePick` only if action is 'winner' or 'invalid' |
+| `transition_picking` | `action`, `new_picking_ends_at`, `shuffled_nums`, `prize_amount`, `player_count` | `setPhase` or `startGame` |
+| `finalize_game` |'' | `setWinnerReveal` (endsAt computed server-side) |
+

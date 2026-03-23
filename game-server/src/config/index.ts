@@ -1,14 +1,21 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const REQUIRED_ENV = ['DATABASE_URL', 'BOT_TOKEN', 'GAME_SECRET'] as const;
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`[config] FATAL: Missing required env vars: ${missing.join(', ')}`);
+  process.exit(1);
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  databaseUrl: process.env.DATABASE_URL || '',
+  databaseUrl: process.env.DATABASE_URL!,
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
-  botToken: process.env.BOT_TOKEN || '',
-  gameSecret: process.env.GAME_SECRET || '',
+  botToken: process.env.BOT_TOKEN!,
+  gameSecret: process.env.GAME_SECRET!,
   registerStickerId: process.env.REGISTER_STICKER_ID || '',
   referralStickerId: process.env.REFERRAL_STICKER_ID || '',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5175',
@@ -44,4 +51,5 @@ export const config = {
   winnerRevealDurationMs: parseInt(process.env.WINNER_REVEAL_DURATION_MS || '10000', 10),
   maxRecoveryRetries: parseInt(process.env.MAX_RECOVERY_RETRIES || '5', 10),
   rateLimitCleanupTimeUtc: process.env.RATE_LIMIT_CLEANUP_TIME_UTC || '00:00',
+  startCommandPhotoId: process.env.START_COMMAND_PHOTO_ID || '',
 };

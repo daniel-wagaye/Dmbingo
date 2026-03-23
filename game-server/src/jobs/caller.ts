@@ -7,6 +7,7 @@ import {
 } from '../services/gameService';
 import { schedulePickingTimer } from './scheduler';
 import { activeRoom } from '../colyseus/GameRoom';
+import { withRetry } from '../utils/retry';
 
 let callingInterval: ReturnType<typeof setInterval> | null = null;
 let activeGameId: number | null = null;
@@ -49,12 +50,11 @@ export function onWinnerDetected(): void {
 async function runFinalization(): Promise<void> {
   try {
     console.log(`[caller] Finalizing game ${activeGameId}...`);
-    const result = await callFinalizeGame();
+    const result = await withRetry(() => callFinalizeGame(), 'finalize_game');
     console.log('[caller] finalize_game result:', result);
 
     stopCallingLoop();
 
-    // Push winner_reveal to Colyseus room
     const revealEndsAtMs = Date.now() + config.winnerRevealDurationMs;
     if (activeRoom) {
       activeRoom.setWinnerReveal(revealEndsAtMs);
@@ -62,7 +62,7 @@ async function runFinalization(): Promise<void> {
 
     scheduleRevealEnd();
   } catch (err) {
-    console.error('[caller] Error finalizing game:', err);
+    console.error('[caller] All retries failed for finalize_game:', err);
     stopCallingLoop();
   }
 }
@@ -72,12 +72,10 @@ function scheduleRevealEnd(): void {
 
   setTimeout(async () => {
     try {
-      // create_next_game returns { game_id, phase, picking_ends_at, stake_amount }
-      const nextGame = await callCreateNextGame();
+      const nextGame = await withRetry(() => callCreateNextGame(), 'create_next_game');
       console.log('[caller] create_next_game returned:', nextGame);
 
       if (nextGame) {
-        // Push new game to Colyseus room using return values (no extra DB query)
         if (activeRoom) {
           activeRoom.setNewGame({
             phase: nextGame.phase || 'maintenance',
@@ -86,14 +84,13 @@ function scheduleRevealEnd(): void {
           });
         }
 
-        // Schedule picking timer using return value directly
         if (nextGame.phase === 'picking' && nextGame.picking_ends_at) {
           const delay = new Date(nextGame.picking_ends_at).getTime() - Date.now();
           schedulePickingTimer(Math.max(delay, 0));
         }
       }
     } catch (err) {
-      console.error('[caller] Error creating next game:', err);
+      console.error('[caller] All retries failed for create_next_game:', err);
     }
   }, config.winnerRevealDurationMs);
 }
@@ -112,10 +109,9 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
     if (activeGameId !== gameId) return;
 
     try {
-      await setCallingStarted(gameId);
+      await withRetry(() => setCallingStarted(gameId), 'set_calling_started');
       console.log(`[caller] Game ${gameId}: calling_started = true`);
 
-      // Push to Colyseus room
       if (activeRoom) {
         activeRoom.setCallingStarted();
       }
@@ -141,17 +137,17 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
         }
 
         try {
-          await updateCalledIndex(gameId, currentIndex);
-          // Push called index to Colyseus room
+          await withRetry(() => updateCalledIndex(gameId, currentIndex), 'update_called_index');
+          // Only push to Colyseus after DB write succeeds
           if (activeRoom) {
             activeRoom.setCalledIndex(currentIndex);
           }
         } catch (err) {
-          console.error(`[caller] Error updating called_index to ${currentIndex}:`, err);
+          console.error(`[caller] Failed to persist called_index ${currentIndex} after retries:`, err);
         }
       }, config.callingIntervalMs);
     } catch (err) {
-      console.error('[caller] Error starting calling:', err);
+      console.error('[caller] All retries failed for set_calling_started:', err);
       stopCallingLoop();
     }
   }, config.callingStartDelayMs);

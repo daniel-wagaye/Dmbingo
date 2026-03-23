@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/drizzle';
-import { adminAuth } from '../middlewares/adminAuth';
+import { adminAuth, requireAdminRole } from '../middlewares/adminAuth';
 import {
   createAdmin,
   listAdmins,
@@ -52,6 +52,7 @@ import {
   listWithdrawals,
 } from '../controllers/withdrawController';
 import { creditUser, listUsers } from '../controllers/userController';
+import { isStartCommandEnabled, setStartCommandEnabled } from '../services/startCommandService';
 
 const router = Router();
 
@@ -82,10 +83,21 @@ const parseDateRange = (startDate?: string, endDate?: string) => {
   return { start, endExclusive };
 };
 
-const toNumber = (value: unknown) => Number(value ?? 0);
+const toNumber = (value: unknown) => {
+  const numericValue = Number(value ?? 0);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+};
 
-router.get('/stats/summary', adminAuth, async (_req, res) => {
-  const [playersResult, gamesResult, depositsResult, withdrawalsResult, transferResult, pendingResult] =
+router.get('/stats/summary', adminAuth, requireAdminRole(['super_admin']), async (_req, res) => {
+  const [
+    playersResult,
+    gamesResult,
+    depositsResult,
+    withdrawalsResult,
+    transferResult,
+    gameProfitResult,
+    pendingResult,
+  ] =
     await Promise.all([
       db.execute(sql`SELECT COUNT(*) AS total_players FROM users`),
       db.execute(sql`SELECT COUNT(*) AS total_games FROM games`),
@@ -97,6 +109,9 @@ router.get('/stats/summary', adminAuth, async (_req, res) => {
       ),
       db.execute(
         sql`SELECT COALESCE(SUM(commission), 0) AS total_commission FROM transfer_history`
+      ),
+      db.execute(
+        sql`SELECT COALESCE(SUM(CASE WHEN house_profit::text = 'NaN' THEN 0 ELSE house_profit END), 0) AS total_game_profit FROM games`
       ),
       db.execute(
         sql`SELECT COUNT(*) AS pending_withdrawals FROM withdrawals_request WHERE status = 'pending'`
@@ -123,6 +138,7 @@ router.get('/stats/summary', adminAuth, async (_req, res) => {
   const totalDeposits = toNumber(depositsResult.rows[0]?.total_deposits);
   const totalWithdrawals = toNumber(withdrawalsResult.rows[0]?.total_withdrawals);
   const totalTransferCommissionProfit = toNumber(transferResult.rows[0]?.total_commission);
+  const totalGameProfit = toNumber(gameProfitResult.rows[0]?.total_game_profit);
   const totalProfit = totalDeposits - totalWithdrawals + totalTransferCommissionProfit;
 
   const monthDeposits = toNumber(monthDepositsResult.rows[0]?.month_deposits);
@@ -137,6 +153,7 @@ router.get('/stats/summary', adminAuth, async (_req, res) => {
       totalDeposits,
       totalWithdrawals,
       totalTransferCommissionProfit,
+      totalGameProfit,
       totalProfit,
     },
     monthly: {
@@ -154,7 +171,7 @@ router.post('/credentials/super/email/send-otp', adminAuth, sendSuperAdminEmailO
 router.post('/credentials/super/email/update', adminAuth, updateSuperAdminEmail);
 router.post('/credentials/withdrawal/password/update', adminAuth, updateWithdrawalAdminPassword);
 
-router.get('/stats/:statKey', adminAuth, async (req, res) => {
+router.get('/stats/:statKey', adminAuth, requireAdminRole(['super_admin']), async (req, res) => {
   const statKey = req.params.statKey;
   const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
   const range = parseDateRange(startDate, endDate);
@@ -205,6 +222,14 @@ router.get('/stats/:statKey', adminAuth, async (req, res) => {
         const result = await db.execute(
           sql`SELECT COALESCE(SUM(commission), 0) AS value FROM transfer_history WHERE 1=1${dateClause(
             'created_at'
+          )}`
+        );
+        return toNumber(result.rows[0]?.value);
+      }
+      case 'total_game_profit': {
+        const result = await db.execute(
+          sql`SELECT COALESCE(SUM(CASE WHEN house_profit::text = 'NaN' THEN 0 ELSE house_profit END), 0) AS value FROM games WHERE 1=1${dateClause(
+            'started_at'
           )}`
         );
         return toNumber(result.rows[0]?.value);
@@ -280,5 +305,29 @@ router.post('/game-config/update', adminAuth, updateGameConfig);
 router.post('/game-status/start', adminAuth, startGameStatus);
 router.post('/game-status/stop', adminAuth, stopGameStatus);
 router.post('/game-control/start', adminAuth, wakeUpGame);
+
+router.get('/start-command', adminAuth, requireAdminRole(['super_admin']), async (_req, res) => {
+  try {
+    const enabled = await isStartCommandEnabled();
+    return res.json({ enabled });
+  } catch (err) {
+    console.error('[start-command] GET failed:', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/start-command', adminAuth, requireAdminRole(['super_admin']), async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'invalid_body', message: 'enabled must be a boolean' });
+    }
+    await setStartCommandEnabled(enabled);
+    return res.json({ success: true, enabled });
+  } catch (err) {
+    console.error('[start-command] POST failed:', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
 
 export default router;

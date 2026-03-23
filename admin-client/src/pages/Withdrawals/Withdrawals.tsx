@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   approveWithdrawal,
@@ -15,6 +15,8 @@ type WithdrawalRow = {
   account_holder: string | null;
   account_num: string | null;
   status: string;
+  declined_reason: string | null;
+  declinedReason?: string | null;
   created_at: string;
   processed_at: string | null;
 };
@@ -23,6 +25,22 @@ type ViewMode = 'pending' | 'history';
 
 const formatNumber = (value: string | number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value ?? 0));
+
+const truncateReason = (value: string) => {
+  if (value.length <= 10) {
+    return value;
+  }
+  return `${value.slice(0, 7)}...`;
+};
+
+const getDeclinedReason = (row: WithdrawalRow): string | null => {
+  const value = row.declined_reason ?? row.declinedReason ?? null;
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+};
 
 const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const [rows, setRows] = useState<WithdrawalRow[]>([]);
@@ -36,21 +54,26 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const [actionPassword, setActionPassword] = useState('');
   const [adminTxNumber, setAdminTxNumber] = useState('');
   const [declineReason, setDeclineReason] = useState<'incorrect' | 'bank' | ''>('');
+  const [declineReasonNote, setDeclineReasonNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [expandedDeclineId, setExpandedDeclineId] = useState<number | null>(null);
+  const declineReasonRef = useRef<HTMLTableCellElement | null>(null);
 
   const columns = useMemo(
-    () => [
-      { key: 'withdrawal_id', label: 'Withdrawal ID' },
-      { key: 'telegram_id', label: 'Telegram ID' },
-      { key: 'first_name', label: 'First Name' },
-      { key: 'amount', label: 'Amount' },
-      { key: 'bank', label: 'Bank' },
-      { key: 'account_holder', label: 'Account Holder' },
-      { key: 'account_num', label: 'Account Number' },
-      { key: 'status', label: 'Status' },
-      { key: 'created_at', label: 'Created At' },
-    ],
-    []
+    () =>
+      [
+        { key: 'withdrawal_id', label: 'Withdrawal ID' },
+        { key: 'telegram_id', label: 'Telegram ID' },
+        { key: 'first_name', label: 'First Name' },
+        { key: 'amount', label: 'Amount' },
+        { key: 'bank', label: 'Bank' },
+        { key: 'account_holder', label: 'Account Holder' },
+        { key: 'account_num', label: 'Account Number' },
+        { key: 'status', label: 'Status' },
+        ...(mode === 'history' ? [{ key: 'declined_reason', label: 'Declined Reason' }] : []),
+        { key: 'created_at', label: 'Created At' },
+      ] as const,
+    [mode]
   );
 
   const loadWithdrawals = async (nextPage = page) => {
@@ -72,6 +95,32 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
     loadWithdrawals(1);
   }, [mode]);
 
+  useEffect(() => {
+    if (!expandedDeclineId) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!declineReasonRef.current) {
+        return;
+      }
+      if (declineReasonRef.current.contains(event.target as Node)) {
+        return;
+      }
+      setExpandedDeclineId(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setExpandedDeclineId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [expandedDeclineId]);
+
   const openApprove = (row: WithdrawalRow) => {
     setSelected(row);
     setActionPassword('');
@@ -83,6 +132,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
     setSelected(row);
     setActionPassword('');
     setDeclineReason('');
+    setDeclineReasonNote('');
     setDeclineOpen(true);
   };
 
@@ -131,12 +181,17 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
       toast.error('Select decline reason.');
       return;
     }
+    if (declineReasonNote.trim().length > 200) {
+      toast.error('Decline information cannot exceed 200 characters.');
+      return;
+    }
     setActionLoading(true);
     try {
       await declineWithdrawal({
         withdrawalId: selected.withdrawal_id,
         actionPassword,
         reason: declineReason,
+        reasonNote: declineReasonNote.trim(),
       });
       toast.success('Withdrawal declined.');
       closeModals();
@@ -200,8 +255,10 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={row.withdrawal_id}>
+              rows.map((row) => {
+                const declinedReasonValue = getDeclinedReason(row);
+                return (
+                  <tr key={row.withdrawal_id}>
                   <td>{row.withdrawal_id}</td>
                   <td>{row.telegram_id}</td>
                   <td>{row.first_name ?? '-'}</td>
@@ -210,6 +267,37 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
                   <td>{row.account_holder ?? '-'}</td>
                   <td>{row.account_num ?? '-'}</td>
                   <td className={`status-pill ${row.status.toLowerCase()}`}>{row.status}</td>
+                  {mode === 'history' ? (
+                    <td
+                      className="decline-reason-cell"
+                      ref={expandedDeclineId === row.withdrawal_id ? declineReasonRef : null}
+                    >
+                      {declinedReasonValue ? (
+                        declinedReasonValue.length > 10 ? (
+                          <>
+                            <button
+                              type="button"
+                              className="decline-reason-trigger"
+                              onClick={() =>
+                                setExpandedDeclineId((prev) =>
+                                  prev === row.withdrawal_id ? null : row.withdrawal_id
+                                )
+                              }
+                            >
+                              {truncateReason(declinedReasonValue)}
+                            </button>
+                            {expandedDeclineId === row.withdrawal_id ? (
+                              <div className="decline-reason-popover">{declinedReasonValue}</div>
+                            ) : null}
+                          </>
+                        ) : (
+                          declinedReasonValue
+                        )
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  ) : null}
                   <td>{new Date(row.created_at).toLocaleString()}</td>
                   <td>
                     {mode === 'pending' ? (
@@ -235,8 +323,9 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
                       '-'
                     )}
                   </td>
-                </tr>
-              ))
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -353,6 +442,17 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
                     Bank
                   </label>
                 </div>
+              </div>
+              <div className="modal-field">
+                <label htmlFor="declineReasonNote">Additional Information</label>
+                <textarea
+                  id="declineReasonNote"
+                  maxLength={200}
+                  value={declineReasonNote}
+                  onChange={(event) => setDeclineReasonNote(event.target.value)}
+                  placeholder="Optional details for the user"
+                />
+                <small>{declineReasonNote.length}/200</small>
               </div>
             </div>
             <div className="modal-actions">

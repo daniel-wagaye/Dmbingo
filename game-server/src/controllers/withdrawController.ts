@@ -119,7 +119,7 @@ export async function requestWithdrawal(req: Request, res: Response): Promise<vo
       // Telegram message
       bot.telegram.sendMessage(
         telegramId,
-        'Your withdrawal is under progress. This may take a few minutes!'
+        'የገንዘብ ማውጣት ሂደትዎ በመከናወን ላይ ነው! ⏳\n\nይህ ጥቂት ደቂቃዎችን ሊወስድ ስለሚችል በትዕግስት ይጠብቁን። 🔄✨'
       ).catch((e) => console.error('[withdraw] telegram msg failed:', e));
     }
   } catch (err) {

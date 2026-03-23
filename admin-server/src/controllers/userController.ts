@@ -1,7 +1,7 @@
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
-import { config } from '../config';
 import { pool } from '../db/drizzle';
+import { sendUserTelegramText } from '../services/telegramNotifier';
 
 type AdminPayload = { adminId: number; role: 'super_admin' | 'withdrawal_admin' };
 
@@ -26,19 +26,16 @@ const parseDateRange = (startDate?: string, endDate?: string) => {
   return { start, endExclusive };
 };
 
-const sendTelegramCreditNotice = async (telegramId: number, amount: number) => {
-  if (!config.telegramBotToken) {
-    return;
-  }
-  const message = `Congratulation\nYou just get ${amount} Birr to Your wallet.`;
-  await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: telegramId,
-      text: message,
-    }),
-  }).catch(() => null);
+const sendTelegramCreditNotice = async (
+  telegramId: number,
+  amount: number,
+  wallet: 'withdrawal' | 'non_withdrawal'
+) => {
+  const walletLabel = wallet === 'withdrawal' ? 'Withdrawal Wallet' : 'Non-Withdrawal Wallet';
+  const message = `እንኳን ደስ ያለዎት! 🎁\nከአስተዳዳሪው የ${amount} ብር ወደ ${walletLabel} ገቢ ተደርጎልዎታል። 💰.`;
+  await sendUserTelegramText(telegramId, message, {
+    messageEffectId: '5046509860389126442',
+  });
 };
 
 export const listUsers = async (req: Request, res: Response) => {
@@ -182,7 +179,9 @@ export const creditUser = async (req: Request, res: Response) => {
 
     await client.query('COMMIT');
 
-    await sendTelegramCreditNotice(telegramId, amount);
+    await sendTelegramCreditNotice(telegramId, amount, wallet).catch((error) => {
+      console.error('[credit] telegram msg failed:', error);
+    });
 
     return res.json({
       status: 'ok',

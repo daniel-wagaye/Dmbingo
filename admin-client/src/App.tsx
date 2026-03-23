@@ -37,7 +37,7 @@ type AdminLayoutProps = {
 
 const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) => {
   const navItems = [
-    { key: 'dashboard', label: 'Dashboard', href: '/admin/dashboard', enabled: true },
+    { key: 'dashboard', label: 'Dashboard', href: '/admin/dashboard', enabled: role === 'super_admin' },
     { key: 'users', label: 'Users', href: '/admin/users', enabled: role === 'super_admin' },
     { key: 'withdrawals', label: 'Withdrawals', href: '/admin/withdrawals/pending', enabled: true },
     { key: 'deposits', label: 'Deposits', href: '/admin/deposits', enabled: role === 'super_admin' },
@@ -67,21 +67,16 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
       <aside className="admin-sidebar">
         <div className="admin-brand">DM Bingo Admin</div>
         <nav className="admin-nav">
-          {navItems.map((item) => {
+          {navItems.filter((item) => item.enabled).map((item) => {
             const isActive =
               item.key === 'withdrawals'
                 ? pathname.startsWith('/admin/withdrawals')
                 : pathname.startsWith(item.href);
-            const disabled = !item.enabled;
             return (
               <a
                 key={item.key}
-                className={`admin-nav-item${isActive ? ' active' : ''}${
-                  disabled ? ' disabled' : ''
-                }`}
-                href={disabled ? '#' : item.href}
-                onClick={disabled ? (event) => event.preventDefault() : undefined}
-                aria-disabled={disabled}
+                className={`admin-nav-item${isActive ? ' active' : ''}`}
+                href={item.href}
               >
                 {item.label}
               </a>
@@ -351,6 +346,10 @@ const App = () => {
 
   if (isAdminRoute && isAuthenticated) {
     if (isDashboardRoute) {
+      if (role !== 'super_admin') {
+        window.location.href = '/admin/withdrawals/pending';
+        return null;
+      }
       return (
         <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
           <Toaster position="top-right" />

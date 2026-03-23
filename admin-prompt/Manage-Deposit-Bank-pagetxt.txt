@@ -1,0 +1,44 @@
+Manage Deposit Bank page (super admin only)
+Title: Bank Accounts
+Top actions
+- Primary (neon orange): Create Bank — visible only to SuperAdmin. Opens Create Bank modal which requires the Admin Action Password to submit.
+- Search input (server-side): Search by bank name or account number.
+- Pagination: server-side paging (default 200 rows/page).
+
+Table columns
+ID | Bank Name | Account Number | Account Holder | Created At | Updated At | Actions
+- Row content: {bank_name} — {account_number} — {account_holder_name} (no copy button).
+- Actions (right-most): Edit (pencil) | Delete (trash, dangerous).
+
+Create Bank modal
+- Header: Create Bank Account
+- Fields:
+  - Bank name — required, max 64 chars.
+  - Account number — required, numeric only; client-side validate length (9–13 digits) and server-side validation.
+  - Account holder name — required, max 64 chars.
+  - Admin Action Password — required (SuperAdmin only). Must be sent to server for verification.
+- Buttons: Close, Create (primary)
+- On Create: POST /admin/banks with { bank_name, account_number, account_holder_name, action_password }. Server must:
+  1. Authenticate requester and confirm role = SuperAdmin.
+  2. Verify action_password (or other secure second-factor) server-side.
+  3. Create bank, return 201 and new resource.
+  5. Append an admin_actions audit entry: { action: 'create_bank', actor_id, target_id, details: { bank_name, account_number, account_holder } }.
+- On success: close modal, toast success, refresh list and ensure Deposit page shows new bank.
+
+Edit Bank modal
+- Header: Edit Bank — #{id}
+- Prefill fields from the row.
+- Admin Action Password — required (SuperAdmin only). Must be sent to server for verification.
+- On Save: PUT /admin/banks/:id with { bank_name, account_number, account_holder_name, action_password }. Server must:
+  1. Authenticate & authorize (allowed roles e.g. SuperAdmin or BankAdmin depending on your policy).
+  2. Verify action_password server-side for edits.
+  3. Update record and return 200.
+  4. Write admin_actions audit entry { action: 'edit_bank', actor_id, target_id, before: {...}, after: {...} }.
+- On success: toast success, refresh.
+
+Delete flow (destructive)
+- Click Delete → confirmation modal (danger).
+  - Message: Are you sure you want to permanently delete {bank_name} — {account_number}? This will remove it from the Deposit page.
+  - Require Admin Action Password input.
+  - Buttons: Cancel, Delete (danger).
+  - On Delete submit: DELETE /admin/banks/:id with { action_password }. Server must verify role + action password, delete, and write admin_actions { action: 'delete_bank', actor_id, target_id, details }. On success: toast success, refresh list.

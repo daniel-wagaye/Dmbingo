@@ -122,6 +122,11 @@ export default function DepositModal({ onClose, onSuccess }: DepositModalProps) 
           ))}
         </div>
 
+        <p style={{ color: 'orange' }}>
+          <strong style={{ paddingLeft: '50px'}}>! ከ30 ብር በታች ማስገባት የተከለከለ ነው።</strong>
+          
+        </p>
+
         {/* SMS / txn input */}
         <textarea
           className="deposit-textarea"

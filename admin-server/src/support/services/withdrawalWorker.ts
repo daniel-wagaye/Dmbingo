@@ -23,12 +23,12 @@ export class WithdrawalWorker {
 
   wakeCreated(): void {
     this.createdWakePending = true;
-    void this.run();
+    this.startRun();
   }
 
   wakeUpdated(): void {
     this.updatedWakePending = true;
-    void this.run();
+    this.startRun();
   }
 
   async runRecovery(): Promise<number> {
@@ -37,6 +37,12 @@ export class WithdrawalWorker {
 
   async getFailedRows(limit = 100): Promise<WithdrawalRow[]> {
     return this.repository.getFailedRows(limit);
+  }
+
+  private startRun(): void {
+    void this.run().catch((error) => {
+      process.stderr.write(`Withdrawal worker run failed: ${String(error)}\n`);
+    });
   }
 
   private async run(): Promise<void> {
@@ -81,14 +87,20 @@ export class WithdrawalWorker {
 
         for (const row of rows) {
           const message = buildWithdrawalMessage(row);
-          const markup = buildWithdrawalInlineKeyboard(row.withdrawal_id);
+          const markup = buildWithdrawalInlineKeyboard();
           try {
             const sent = await this.telegramClient.sendMessage(chatId, message, markup);
             await this.updateWithRetry(() => this.repository.markSent(row.withdrawal_id, sent.message_id), row);
           } catch (error) {
-            await this.repository.markTransientFailure(
-              row.withdrawal_id,
-              error instanceof Error ? error.message : 'Unknown Telegram error'
+            process.stderr.write(
+              `Support send failed for withdrawal ${row.withdrawal_id} to chat ${String(chatId)}: ${
+                error instanceof Error ? error.message : String(error)
+              }\n`
+            );
+            await this.safeFailureMark(
+              () =>
+                this.repository.markTransientFailure(row.withdrawal_id),
+              row.withdrawal_id
             );
           }
           await sleep(config.sendGapMs);
@@ -116,7 +128,7 @@ export class WithdrawalWorker {
       const rows = await this.repository.claimUpdatedBatch(client, config.batchSize);
       for (const row of rows) {
         try {
-          const markup = buildWithdrawalInlineKeyboard(row.withdrawal_id);
+          const markup = buildWithdrawalInlineKeyboard();
           if (row.tg_message_id && withinEditableWindow(row.created_at)) {
             await this.telegramClient.editMessageText(
               chatId,
@@ -133,9 +145,15 @@ export class WithdrawalWorker {
             await this.updateWithRetry(() => this.repository.markFinished(row.withdrawal_id, sent.message_id), row);
           }
         } catch (error) {
-          await this.repository.markUpdateFailure(
-            row.withdrawal_id,
-            error instanceof Error ? error.message : 'Unknown update error'
+          process.stderr.write(
+            `Support update failed for withdrawal ${row.withdrawal_id} to chat ${String(chatId)}: ${
+              error instanceof Error ? error.message : String(error)
+            }\n`
+          );
+          await this.safeFailureMark(
+            () =>
+              this.repository.markUpdateFailure(row.withdrawal_id),
+            row.withdrawal_id
           );
         }
         await sleep(config.sendGapMs);
@@ -154,15 +172,26 @@ export class WithdrawalWorker {
         return;
       } catch (error) {
         if (attempt === retries) {
-          await this.repository.markTransientFailure(
-            row.withdrawal_id,
-            error instanceof Error ? error.message : 'Database update failed'
+          await this.safeFailureMark(
+            () =>
+              this.repository.markTransientFailure(row.withdrawal_id),
+            row.withdrawal_id
           );
           return;
         }
         await sleep(300 * 2 ** attempt);
         attempt += 1;
       }
+    }
+  }
+
+  private async safeFailureMark(mark: () => Promise<void>, withdrawalId: number): Promise<void> {
+    try {
+      await mark();
+    } catch (error) {
+      process.stderr.write(
+        `Failed to persist support worker error state for withdrawal ${withdrawalId}: ${String(error)}\n`
+      );
     }
   }
 }

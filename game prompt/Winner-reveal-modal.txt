@@ -1,0 +1,26 @@
+9. Winner reveal modal — full UI & logic (client)
+When games.phase === 'winner_reveal' client must open a non-dismissible reveal modal. Use games.winner_reveal_ends_at for countdown.
+
+Modal layout & content
+ - centered card with blurred/dimmed backdrop (user cannot dismiss).
+ - Header:
+   - Winners exist → big glossy 'BINGO!' (orange).
+   - No winners → big glossy 'Game Over'.
+ - Notification Box (varies):
+   - Single winner:
+     - If viewer is winner → You win (You highlighted green)
+     - Else → {winner_name} has won the game. (name highlighted).
+   - Multiple winners:
+     - If viewer is winner → You and {N-1} other players win (You & count highlighted).
+     - Else → {first_winner} and {N-1} others have won the game.
+   - No winners
+     - Message: It looks like luck wasn't on anyone's side this time. No valid Bingo claims were made. Prize moved to house profit. Try again next round!
+ - Main body— winners' cards
+   - Show the winners’ saved 5×5 players_pick cards:
+     - Called numbers → highlighted yellow
+     - Winning pattern → highlighted green (glowing)
+     - Center Free →highlighted  green labeled Free
+     - Card label Board number x
+   - If multiple winners → vertically scrollable list; viewer’s own card prioritized & emphasized.
+ - Countdown & redirect
+   - Bottom glowing orange bar with countdown from winner_reveal_ends_at.

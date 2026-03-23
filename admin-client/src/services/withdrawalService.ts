@@ -9,6 +9,7 @@ type WithdrawalRow = {
   account_holder: string | null;
   account_num: string | null;
   status: string;
+  declined_reason: string | null;
   created_at: string;
   processed_at: string | null;
 };
@@ -65,6 +66,7 @@ export const declineWithdrawal = async (payload: {
   withdrawalId: number;
   actionPassword: string;
   reason: 'incorrect' | 'bank';
+  reasonNote?: string;
 }) =>
   request<{ status: 'ok' }>('/admin/withdrawals/decline', {
     method: 'POST',

@@ -1,0 +1,1156 @@
+this are all my pg function:
+CREATE OR REPLACE FUNCTION recover_game_state()
+RETURNS JSON
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    current_game      RECORD;
+    config            RECORD;
+    winner            RECORD;
+    global_status     TEXT;
+    total_prize       NUMERIC(12,2);
+    new_game_id       BIGINT;
+    new_game_phase    TEXT;               -- phase of the newly created game
+    new_picking_ends  TIMESTAMPTZ;         -- picking_ends_at of the new game
+    winner_count      INT;
+    has_winners       BOOLEAN;
+    winner_list       JSONB := '[]'::JSONB;
+    cents_total       BIGINT;
+    base_cents        BIGINT;
+    last_cents        BIGINT;
+    share_cents       BIGINT;
+    last_winner_id    BIGINT;
+    result_json       JSONB;               -- final JSON to return
+BEGIN
+    -- Advisory lock to serialise all recovery attempts.
+    PERFORM pg_advisory_xact_lock(1);
+
+    -- Lock the latest game row to prevent concurrent recovery attempts
+    SELECT * INTO current_game
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    -- If no game exists, create the first one (always maintenance)
+    IF NOT FOUND THEN
+        INSERT INTO games (phase, stake_amount, minimum_player, picking_ends_at,
+                           calling_started, shuffled_nums, prize_amount, house_profit, started_at)
+        SELECT 'maintenance', stake_amount, minimum_player, NULL, FALSE, NULL, NULL, NULL, NOW()
+        FROM game_config WHERE id = 1
+        RETURNING game_id, phase INTO new_game_id, new_game_phase;
+        -- No picking_ends_at for maintenance games
+
+        RETURN json_build_object(
+            'recovered', true,
+            'action', 'initial_game_created',
+            'new_game_id', new_game_id,
+            'new_game_phase', new_game_phase
+            -- picking_ends_at intentionally omitted
+        );
+    END IF;
+
+    -- Lock and read the global game status
+    SELECT status INTO STRICT global_status
+    FROM game_status
+    WHERE id = 1
+    FOR UPDATE;
+
+    -- Lock and read game_config
+    SELECT * INTO STRICT config
+    FROM game_config
+    WHERE id = 1
+    FOR UPDATE;
+
+    -- ====================================================================
+    -- PHASE: maintenance – nothing to recover
+    -- ====================================================================
+    IF current_game.phase = 'maintenance' THEN
+        RETURN json_build_object(
+            'recovered', true,
+            'action', 'none',
+            'game_id', current_game.game_id,
+            'phase', current_game.phase
+            -- picking_ends_at omitted
+        );
+    END IF;
+
+    -- ====================================================================
+    -- PHASE: picking – refund all players who have picked a board
+    -- ====================================================================
+    IF current_game.phase = 'picking' THEN
+        -- Lock all player_picks rows that will be refunded
+        PERFORM 1 FROM player_picks
+        WHERE game_id = current_game.game_id
+          AND telegram_id IS NOT NULL
+        FOR UPDATE;
+
+        -- Refund players
+        UPDATE users u
+        SET withdrawal_wallet    = u.withdrawal_wallet + p.withdrawal_used,
+            non_withdrawal_wallet = u.non_withdrawal_wallet + p.non_withdrawal_used
+        FROM player_picks p
+        WHERE p.game_id = current_game.game_id
+          AND p.telegram_id IS NOT NULL
+          AND p.telegram_id = u.telegram_id;
+
+        -- Mark current game as error
+        UPDATE games
+        SET phase = 'error',
+            finished_at = NOW()
+        WHERE game_id = current_game.game_id;
+
+        -- Insert next game based on game_status
+        IF global_status = 'stopped' THEN
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'maintenance', 0, 0, NULL,
+                FALSE, NULL, NULL, NULL, NOW()
+            ) RETURNING game_id, phase INTO new_game_id, new_game_phase;
+            -- No picking_ends_at for maintenance
+        ELSE
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'picking',
+                config.stake_amount,
+                config.minimum_player,
+                NOW() + (config.picking_countdown_end_time * INTERVAL '1 second'),
+                FALSE,
+                NULL,
+                NULL,
+                NULL,
+                NOW()
+            ) RETURNING game_id, phase, picking_ends_at INTO new_game_id, new_game_phase, new_picking_ends;
+        END IF;
+
+        -- Build base result
+        result_json := jsonb_build_object(
+            'recovered', true,
+            'action', 'refunded_picking',
+            'previous_game_id', current_game.game_id,
+            'new_game_id', new_game_id,
+            'new_game_phase', new_game_phase
+        );
+
+        -- Conditionally add picking_ends_at only if new game phase is 'picking'
+        IF new_game_phase = 'picking' THEN
+            result_json := result_json || jsonb_build_object('picking_ends_at', new_picking_ends);
+        END IF;
+
+        RETURN result_json;
+    END IF;
+
+    -- ====================================================================
+    -- PHASE: started – check if any winners exist
+    -- ====================================================================
+    IF current_game.phase = 'started' THEN
+        -- Use EXISTS to get a stable boolean
+        SELECT EXISTS (
+            SELECT 1 FROM player_picks
+            WHERE game_id = current_game.game_id AND winner = TRUE
+        ) INTO has_winners;
+
+        IF has_winners THEN
+            -- There are winners – credit them
+            total_prize := COALESCE(current_game.prize_amount, 0);
+            SELECT COUNT(*) INTO winner_count
+            FROM player_picks
+            WHERE game_id = current_game.game_id AND winner = TRUE;
+
+            IF winner_count IS NULL OR winner_count = 0 THEN
+                RAISE EXCEPTION 'Inconsistent state: has_winners = true but winner_count = 0 for game %', current_game.game_id;
+            END IF;
+
+            cents_total := (total_prize * 100)::BIGINT;
+            base_cents := cents_total / winner_count;
+            last_cents := cents_total - (base_cents * (winner_count - 1));
+
+            SELECT telegram_id INTO last_winner_id
+            FROM player_picks
+            WHERE game_id = current_game.game_id AND winner = TRUE
+            ORDER BY telegram_id DESC
+            LIMIT 1;
+
+            FOR winner IN
+                SELECT telegram_id, board_id
+                FROM player_picks
+                WHERE game_id = current_game.game_id AND winner = TRUE
+                ORDER BY telegram_id
+                FOR UPDATE
+            LOOP
+                IF winner.telegram_id = last_winner_id THEN
+                    share_cents := last_cents;
+                ELSE
+                    share_cents := base_cents;
+                END IF;
+
+                UPDATE users
+                SET withdrawal_wallet = withdrawal_wallet + (share_cents::NUMERIC / 100)
+                WHERE telegram_id = winner.telegram_id;
+
+                INSERT INTO winners_history (game_id, telegram_id, board_id, credited_amount)
+                VALUES (
+                    current_game.game_id,
+                    winner.telegram_id,
+                    winner.board_id,
+                    share_cents::NUMERIC / 100
+                );
+
+                winner_list := winner_list || jsonb_build_object(
+                    'telegram_id', winner.telegram_id,
+                    'board_id', winner.board_id,
+                    'amount', share_cents::NUMERIC / 100
+                );
+            END LOOP;
+
+            UPDATE games
+            SET phase = 'error',
+                finished_at = NOW()
+            WHERE game_id = current_game.game_id;
+        ELSE
+            -- No winners – refund all players
+            PERFORM 1 FROM player_picks
+            WHERE game_id = current_game.game_id
+              AND telegram_id IS NOT NULL
+            FOR UPDATE;
+
+            UPDATE users u
+            SET withdrawal_wallet    = u.withdrawal_wallet + p.withdrawal_used,
+                non_withdrawal_wallet = u.non_withdrawal_wallet + p.non_withdrawal_used
+            FROM player_picks p
+            WHERE p.game_id = current_game.game_id
+              AND p.telegram_id IS NOT NULL
+              AND p.telegram_id = u.telegram_id;
+
+            UPDATE games
+            SET phase = 'error',
+                finished_at = NOW()
+            WHERE game_id = current_game.game_id;
+        END IF;
+
+        -- Insert next game based on game_status
+        IF global_status = 'stopped' THEN
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'maintenance', 0, 0, NULL,
+                FALSE, NULL, NULL, NULL, NOW()
+            ) RETURNING game_id, phase INTO new_game_id, new_game_phase;
+            -- No picking_ends_at for maintenance
+        ELSE
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'picking',
+                config.stake_amount,
+                config.minimum_player,
+                NOW() + (config.picking_countdown_end_time * INTERVAL '1 second'),
+                FALSE,
+                NULL,
+                NULL,
+                NULL,
+                NOW()
+            ) RETURNING game_id, phase, picking_ends_at INTO new_game_id, new_game_phase, new_picking_ends;
+        END IF;
+
+        -- Build base result
+        result_json := jsonb_build_object(
+            'recovered', true,
+            'action', CASE WHEN has_winners THEN 'credited_winners' ELSE 'refunded_started' END,
+            'previous_game_id', current_game.game_id,
+            'new_game_id', new_game_id,
+            'new_game_phase', new_game_phase,
+            'winners', winner_list
+        );
+
+        -- Conditionally add picking_ends_at only if new game phase is 'picking'
+        IF new_game_phase = 'picking' THEN
+            result_json := result_json || jsonb_build_object('picking_ends_at', new_picking_ends);
+        END IF;
+
+        RETURN result_json;
+    END IF;
+
+    -- ====================================================================
+    -- PHASE: winner_reveal or finished – just start a new game
+    -- ====================================================================
+    IF current_game.phase IN ('winner_reveal', 'finished') THEN
+        UPDATE games
+        SET phase = 'finished',
+            finished_at = COALESCE(finished_at, NOW())
+        WHERE game_id = current_game.game_id;
+
+        IF global_status = 'stopped' THEN
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'maintenance', 0, 0, NULL,
+                FALSE, NULL, NULL, NULL, NOW()
+            ) RETURNING game_id, phase INTO new_game_id, new_game_phase;
+            -- No picking_ends_at for maintenance
+        ELSE
+            INSERT INTO games (
+                phase, stake_amount, minimum_player, picking_ends_at,
+                calling_started, shuffled_nums, prize_amount, house_profit, started_at
+            ) VALUES (
+                'picking',
+                config.stake_amount,
+                config.minimum_player,
+                NOW() + (config.picking_countdown_end_time * INTERVAL '1 second'),
+                FALSE,
+                NULL,
+                NULL,
+                NULL,
+                NOW()
+            ) RETURNING game_id, phase, picking_ends_at INTO new_game_id, new_game_phase, new_picking_ends;
+        END IF;
+
+        -- Build base result
+        result_json := jsonb_build_object(
+            'recovered', true,
+            'action', 'advanced_to_next_game',
+            'previous_game_id', current_game.game_id,
+            'new_game_id', new_game_id,
+            'new_game_phase', new_game_phase
+        );
+
+        -- Conditionally add picking_ends_at only if new game phase is 'picking'
+        IF new_game_phase = 'picking' THEN
+            result_json := result_json || jsonb_build_object('picking_ends_at', new_picking_ends);
+        END IF;
+
+        RETURN result_json;
+    END IF;
+
+    -- If we reach here, phase is unknown – do nothing but report
+    RETURN json_build_object(
+        'recovered', true,
+        'action', 'unknown_phase_ignored',
+        'game_id', current_game.game_id,
+        'phase', current_game.phase
+        -- picking_ends_at omitted
+    );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION pick_board(
+    p_telegram_id BIGINT,
+    p_target_board SMALLINT
+) RETURNS JSON AS $$
+DECLARE
+    v_game_id           BIGINT;
+    v_phase             TEXT;
+    v_stake             NUMERIC(12,2);
+    v_old_board         SMALLINT;
+    v_prev_withdrawal   NUMERIC(12,2);
+    v_prev_non          NUMERIC(12,2);
+    v_target            RECORD;
+    v_user              RECORD;
+    v_total             NUMERIC(12,2);
+    v_withdrawal_used   NUMERIC(12,2);
+    v_non_withdrawal_used NUMERIC(12,2);
+BEGIN
+    -- 1. Get the current active game (latest game_id) efficiently
+    SELECT game_id INTO v_game_id
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1;
+
+    IF v_game_id IS NULL THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'NO_GAME',
+            'message', 'No active game',
+            'status_code', 500
+        );
+    END IF;
+
+    -- 2. Lock the game row and check phase (also fetch stake)
+    SELECT phase, stake_amount INTO v_phase, v_stake
+    FROM games
+    WHERE game_id = v_game_id
+    FOR UPDATE;
+
+    IF v_phase != 'picking' THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'PICKING_CLOSED',
+            'message', 'Picking phase ended',
+            'status_code', 409
+        );
+    END IF;
+
+    -- 3. Silent abort for unregistered users (spec requirement)
+    IF NOT EXISTS (SELECT 1 FROM users WHERE telegram_id = p_telegram_id) THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'USER_NOT_FOUND',
+            'silent', true,
+            'status_code', 204
+        );
+    END IF;
+
+    -- 4. Find user's existing pick in this game (if any)
+    SELECT board_id INTO v_old_board
+    FROM player_picks
+    WHERE game_id = v_game_id AND telegram_id = p_telegram_id
+    FOR UPDATE;
+
+    -- 5. Lock both boards (old and target) in ascending order (deadlock-proof)
+    PERFORM board_id
+    FROM player_picks
+    WHERE board_id = p_target_board
+       OR (v_old_board IS NOT NULL AND board_id = v_old_board)
+    ORDER BY board_id
+    FOR UPDATE;
+
+    -- 6. Fetch the target board (now locked)
+    SELECT * INTO v_target
+    FROM player_picks
+    WHERE board_id = p_target_board;
+
+    -- 7. Ensure the target board exists
+    IF v_target IS NULL THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'INVALID_BOARD',
+            'message', 'Board number does not exist',
+            'status_code', 400
+        );
+    END IF;
+
+    -- 9. If target is taken by someone else in the current game → BOARD_TAKEN
+    IF v_target.telegram_id IS NOT NULL
+       AND v_target.game_id = v_game_id
+       AND v_target.telegram_id != p_telegram_id THEN
+        RETURN json_build_object(
+            'success', false,
+            'error', 'BOARD_TAKEN',
+            'message', 'Board is selected by others',
+            'status_code', 409
+        );
+    END IF;
+
+    -- 10. Lock the user's wallet
+    SELECT withdrawal_wallet, non_withdrawal_wallet INTO v_user
+    FROM users
+    WHERE telegram_id = p_telegram_id
+    FOR UPDATE;
+
+    -- =========================================================================
+    -- CASE A: Unpick (clicked own slot)
+    -- =========================================================================
+    IF v_target.telegram_id = p_telegram_id AND v_target.game_id = v_game_id THEN
+        UPDATE users
+        SET withdrawal_wallet    = withdrawal_wallet    + v_target.withdrawal_used,
+            non_withdrawal_wallet = non_withdrawal_wallet + v_target.non_withdrawal_used
+        WHERE telegram_id = p_telegram_id;
+
+        UPDATE player_picks
+        SET telegram_id = NULL,
+	    game_id = NULL,
+            withdrawal_used = 0,
+            non_withdrawal_used = 0
+        WHERE board_id = p_target_board;
+
+        RETURN json_build_object(
+            'success', true,
+            'action', 'unpick',
+            'refunded', v_target.withdrawal_used + v_target.non_withdrawal_used
+        );
+    END IF;
+
+    -- =========================================================================
+    -- CASE B: First‑time pick (no previous pick)
+    -- =========================================================================
+    IF v_old_board IS NULL THEN
+        v_total := v_user.withdrawal_wallet + v_user.non_withdrawal_wallet;
+        IF v_total < v_stake THEN
+            RETURN json_build_object(
+                'success', false,
+                'error', 'INSUFFICIENT_FUNDS',
+                'message', 'Insufficient balance to pick',
+                'status_code', 402
+            );
+        END IF;
+
+        -- Priority: use non_withdrawal_wallet first
+        v_non_withdrawal_used := LEAST(v_user.non_withdrawal_wallet, v_stake);
+        v_withdrawal_used     := v_stake - v_non_withdrawal_used;
+
+        UPDATE users
+        SET withdrawal_wallet    = withdrawal_wallet    - v_withdrawal_used,
+            non_withdrawal_wallet = non_withdrawal_wallet - v_non_withdrawal_used
+        WHERE telegram_id = p_telegram_id;
+
+        UPDATE player_picks
+        SET telegram_id         = p_telegram_id,
+            game_id             = v_game_id,
+            withdrawal_used     = v_withdrawal_used,
+            non_withdrawal_used = v_non_withdrawal_used,
+            winner              = FALSE,   -- reset flags
+            invalid             = FALSE,
+            picked_at           = NOW()
+        WHERE board_id = p_target_board;
+
+        RETURN json_build_object(
+            'success', true,
+            'action', 'pick',
+            'charged', json_build_object(
+                'withdrawal_used', v_withdrawal_used,
+                'non_withdrawal_used', v_non_withdrawal_used
+            )
+        );
+    END IF;
+
+    -- =========================================================================
+    -- CASE C: Move‑pick (user already has a pick)
+    -- =========================================================================
+    SELECT withdrawal_used, non_withdrawal_used
+    INTO v_prev_withdrawal, v_prev_non
+    FROM player_picks
+    WHERE board_id = v_old_board;
+
+    -- Clear the old board (reset all fields)
+    UPDATE player_picks
+    SET telegram_id = NULL,
+	game_id = NULL,
+        withdrawal_used = 0,
+        non_withdrawal_used = 0
+    WHERE board_id = v_old_board;
+
+    -- Assign the new board with the same used amounts
+    UPDATE player_picks
+    SET game_id             = v_game_id,
+        telegram_id         = p_telegram_id,
+        withdrawal_used     = v_prev_withdrawal,
+        non_withdrawal_used = v_prev_non,
+        winner              = FALSE,   -- reset flags
+        invalid             = FALSE,
+        picked_at           = NOW()
+    WHERE board_id = p_target_board;
+
+    RETURN json_build_object(
+        'success', true,
+        'action', 'move',
+        'from', v_old_board,
+        'to', p_target_board
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION transition_picking()
+RETURNS JSONB
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+DECLARE
+    v_game             games%ROWTYPE;
+    v_config           game_config%ROWTYPE;
+    v_player_count     INT;
+    v_shuffled_nums    JSONB;
+    v_prize_amount     NUMERIC(12,2);
+    v_house_profit     NUMERIC(12,2);
+    v_new_picking_ends TIMESTAMPTZ;
+BEGIN
+    -- 1. Lock the current (latest) game row
+    SELECT * INTO STRICT v_game
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    -- 2. Verify the game is in 'picking' phase
+    IF v_game.phase != 'picking' THEN
+        RAISE EXCEPTION 'Game is not in picking phase (current phase: %)', v_game.phase
+            USING HINT = 'transition_picking() should only be called during picking phase.';
+    END IF;
+
+    -- 3. Lock all picked boards for this game (prevent concurrent picks)
+    --    Order by board_id to avoid deadlocks with pick_board()
+    PERFORM 1
+    FROM player_picks
+    WHERE game_id = v_game.game_id
+      AND telegram_id IS NOT NULL
+    ORDER BY board_id
+    FOR UPDATE;
+
+    -- 4. Count players who have picked a board
+    SELECT COUNT(*)
+    INTO v_player_count
+    FROM player_picks
+    WHERE game_id = v_game.game_id
+      AND telegram_id IS NOT NULL;
+
+    -- 5. Fetch the single row from game_config
+    SELECT * INTO STRICT v_config
+    FROM game_config
+    WHERE id = 1
+    FOR UPDATE;  -- lock to prevent concurrent changes
+
+    -- 6. Decide whether to extend or start
+    IF v_player_count < v_config.minimum_player THEN
+        -- Extend picking phase
+        v_new_picking_ends := NOW() + (v_config.picking_countdown_end_time * INTERVAL '1 second');
+
+        UPDATE games
+        SET picking_ends_at = v_new_picking_ends
+        WHERE game_id = v_game.game_id;
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'action', 'extended',
+            'player_count', v_player_count,
+            'minimum_player', v_config.minimum_player,
+            'new_picking_ends_at', v_new_picking_ends
+        );
+    ELSE
+        -- Enough players → start the game
+        -- Generate shuffled numbers 1..75 (random order)
+        SELECT jsonb_agg(n ORDER BY random())
+        INTO v_shuffled_nums
+        FROM generate_series(1, 75) n;
+
+        -- Calculate prize and house profit
+        v_prize_amount := ROUND(
+            (v_player_count * v_game.stake_amount * v_config.prize_percent) / 100.0,
+            2
+        );
+        v_house_profit := ROUND(
+            (v_player_count * v_game.stake_amount) - v_prize_amount,
+            2
+        );
+
+        -- Update the game row to 'started'
+        UPDATE games
+        SET phase            = 'started',
+            shuffled_nums    = v_shuffled_nums,
+            prize_amount     = v_prize_amount,
+            active_players   = v_player_count,
+            house_profit     = v_house_profit,
+            started_at       = NOW()
+        WHERE game_id = v_game.game_id;
+
+        RETURN jsonb_build_object(
+            'success', true,
+            'action', 'started',
+            'game_id', v_game.game_id,
+            'player_count', v_player_count,
+            'prize_amount', v_prize_amount,
+            'house_profit', v_house_profit,
+            'shuffled_nums', v_shuffled_nums
+        );
+    END IF;
+END;
+$$;
+
+-- ----------------------------------------------------------------------
+-- Helper function: check_bingo
+-- Returns TRUE if the card has any winning line (row, column, diagonal,
+-- or four corners) using the provided called numbers.
+-- The centre cell (row 3, column 3) is always considered marked.
+-- Defensively handles missing or malformed JSON cells.
+-- ----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION check_bingo(card jsonb, called jsonb)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    i INT;
+    j INT;
+    cell_text TEXT;
+    cell INT;
+    marked BOOLEAN;
+    diag1 BOOLEAN := TRUE;
+    diag2 BOOLEAN := TRUE;
+    corners_ok BOOLEAN;
+    called_set INT[];
+BEGIN
+    -- Convert called numbers into an array; if none, use empty array
+    SELECT COALESCE(array_agg(value::int), '{}'::int[]) INTO called_set
+    FROM jsonb_array_elements_text(called) AS t(value);
+
+    -- ------------------------------------------------------------------
+    -- Check rows and columns
+    -- ------------------------------------------------------------------
+    FOR i IN 0..4 LOOP
+        -- Row i
+        marked := TRUE;
+        FOR j IN 0..4 LOOP
+            IF i = 2 AND j = 2 THEN
+                CONTINUE;  -- centre is free
+            END IF;
+            cell_text := card->i->>j;
+            IF cell_text IS NULL THEN
+                marked := FALSE;
+                EXIT;
+            END IF;
+            cell := cell_text::int;
+            IF NOT (cell = ANY(called_set)) THEN
+                marked := FALSE;
+                EXIT;
+            END IF;
+        END LOOP;
+        IF marked THEN
+            RETURN TRUE;
+        END IF;
+
+        -- Column i
+        marked := TRUE;
+        FOR j IN 0..4 LOOP
+            IF j = 2 AND i = 2 THEN
+                CONTINUE;  -- centre is free
+            END IF;
+            cell_text := card->j->>i;
+            IF cell_text IS NULL THEN
+                marked := FALSE;
+                EXIT;
+            END IF;
+            cell := cell_text::int;
+            IF NOT (cell = ANY(called_set)) THEN
+                marked := FALSE;
+                EXIT;
+            END IF;
+        END LOOP;
+        IF marked THEN
+            RETURN TRUE;
+        END IF;
+    END LOOP;
+
+    -- ------------------------------------------------------------------
+    -- Main diagonal (top‑left to bottom‑right)
+    -- ------------------------------------------------------------------
+    FOR i IN 0..4 LOOP
+        IF i = 2 THEN
+            CONTINUE;  -- centre is free
+        END IF;
+        cell_text := card->i->>i;
+        IF cell_text IS NULL THEN
+            diag1 := FALSE;
+            EXIT;
+        END IF;
+        cell := cell_text::int;
+        IF NOT (cell = ANY(called_set)) THEN
+            diag1 := FALSE;
+            EXIT;
+        END IF;
+    END LOOP;
+    IF diag1 THEN
+        RETURN TRUE;
+    END IF;
+
+    -- ------------------------------------------------------------------
+    -- Anti‑diagonal (top‑right to bottom‑left)
+    -- ------------------------------------------------------------------
+    FOR i IN 0..4 LOOP
+        IF i = 2 THEN
+            CONTINUE;  -- centre is free
+        END IF;
+        cell_text := card->i->>(4 - i);
+        IF cell_text IS NULL THEN
+            diag2 := FALSE;
+            EXIT;
+        END IF;
+        cell := cell_text::int;
+        IF NOT (cell = ANY(called_set)) THEN
+            diag2 := FALSE;
+            EXIT;
+        END IF;
+    END LOOP;
+    IF diag2 THEN
+        RETURN TRUE;
+    END IF;
+
+    -- ------------------------------------------------------------------
+    -- Four Corners: (0,0), (0,4), (4,0), (4,4)
+    -- ------------------------------------------------------------------
+    cell_text := card->0->>0;
+    corners_ok := cell_text IS NOT NULL AND (cell_text::int = ANY(called_set));
+
+    cell_text := card->0->>4;
+    corners_ok := corners_ok AND cell_text IS NOT NULL AND (cell_text::int = ANY(called_set));
+
+    cell_text := card->4->>0;
+    corners_ok := corners_ok AND cell_text IS NOT NULL AND (cell_text::int = ANY(called_set));
+
+    cell_text := card->4->>4;
+    corners_ok := corners_ok AND cell_text IS NOT NULL AND (cell_text::int = ANY(called_set));
+
+    IF corners_ok THEN
+        RETURN TRUE;
+    END IF;
+
+    -- No winning pattern found
+    RETURN FALSE;
+END;
+$$;
+
+-- ----------------------------------------------------------------------
+-- Main claim function: claim_bingo (auto-detects current game)
+-- Called when a user clicks the BINGO! button during the started phase.
+-- It automatically uses the latest game and performs all authoritative
+-- checks atomically.
+-- ----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION claim_bingo(
+    p_board_id     SMALLINT,
+    p_telegram_id  BIGINT,
+    OUT result     JSONB
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_game          RECORD;
+    v_game_id       BIGINT;          -- store the locked game's ID
+    v_pick          RECORD;
+    v_called_numbers JSONB;
+    v_is_win        BOOLEAN;
+    v_winner_name   TEXT;            -- to hold the winner's first name
+BEGIN
+    -- 1. Lock and read the current active game (latest game_id)
+    SELECT phase, calling_started, shuffled_nums, called_index, game_id
+    INTO v_game
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'No active game');
+        RETURN;
+    END IF;
+
+    v_game_id := v_game.game_id;      -- save the locked game's ID
+
+    -- 2. Verify game is in started phase and calling has started
+    IF v_game.phase != 'started' OR v_game.calling_started != TRUE THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'Game not ready for claims');
+        RETURN;
+    END IF;
+
+    -- 3. Lock and read the player's pick for this game
+    SELECT * INTO v_pick
+    FROM player_picks
+    WHERE game_id = v_game_id          -- use the saved ID
+      AND board_id = p_board_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'Pick not found');
+        RETURN;
+    END IF;
+
+    -- 4. Check ownership and that the board is not already invalid/winner
+    IF v_pick.telegram_id != p_telegram_id THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'Not your board');
+        RETURN;
+    END IF;
+
+    IF v_pick.invalid THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'Board already invalid');
+        RETURN;
+    END IF;
+
+    IF v_pick.winner THEN
+        result = jsonb_build_object('success', false, 'action', 'ignore', 'message', 'Already a winner');
+        RETURN;
+    END IF;
+
+    -- 5. Build the list of called numbers up to the current called_index
+    SELECT COALESCE(jsonb_agg(value ORDER BY idx), '[]'::jsonb)
+    INTO v_called_numbers
+    FROM jsonb_array_elements(v_game.shuffled_nums) WITH ORDINALITY AS elem(value, idx)
+    WHERE idx <= v_game.called_index;
+
+    -- 6. Validate whether the card actually has a bingo
+    v_is_win := check_bingo(v_pick.bingo_card, v_called_numbers);
+
+    IF v_is_win THEN
+        -- 7a. Winner – fetch the user's first name
+        SELECT first_name INTO v_winner_name
+        FROM users
+        WHERE telegram_id = p_telegram_id;
+
+        -- Update the pick with winner status and name
+        UPDATE player_picks
+        SET winner = TRUE,
+            winner_name = v_winner_name
+        WHERE game_id = v_game_id
+          AND board_id = p_board_id;
+
+        -- Build result including the winner's name
+        result = jsonb_build_object(
+            'success', true,
+            'action', 'winner',
+            'winner', true,
+            'winner_name', v_winner_name,
+            'message', 'Bingo confirmed'
+        );
+    ELSE
+        -- 7b. Not a winner – mark the board as invalid
+        UPDATE player_picks
+        SET invalid = TRUE
+        WHERE game_id = v_game_id
+          AND board_id = p_board_id;
+
+        result = jsonb_build_object(
+            'success', true,
+            'action', 'invalid',
+            'winner', false,
+            'message', 'No bingo'
+        );
+    END IF;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        result = jsonb_build_object('success', false, 'action', 'error', 'message', SQLERRM);
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION finalize_game()
+RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_game           games%ROWTYPE;
+    v_winner_count   INT;
+    v_prize_cents    BIGINT;
+    v_base_cents     BIGINT;
+    v_rem_cents      INT;
+    v_share_cents    BIGINT;
+    v_share_num      NUMERIC(12,2);
+    v_winner_rec     RECORD;
+    v_result         JSONB;
+    v_i              INT := 0;
+BEGIN
+    -- 1. Lock and fetch the current (latest) game row
+    SELECT * INTO v_game
+    FROM games
+    ORDER BY game_id DESC
+    LIMIT 1
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'NO_GAME_FOUND'
+        );
+    END IF;
+
+    -- 2. Only started games can be finalized
+    IF v_game.phase != 'started' THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'INVALID_PHASE',
+            'phase', v_game.phase,
+            'game_id', v_game.game_id
+        );
+    END IF;
+
+    -- 3. Count winners (NO FOR UPDATE – rows will be locked in the loop)
+    SELECT COUNT(*) INTO v_winner_count
+    FROM player_picks
+    WHERE game_id = v_game.game_id AND winner = TRUE;
+
+    -- 4. Process based on winner count
+    IF v_winner_count > 0 THEN
+        -- Convert prize to cents for exact distribution
+        v_prize_cents := (v_game.prize_amount * 100)::BIGINT;
+        v_base_cents  := v_prize_cents / v_winner_count;   -- integer division truncates
+        v_rem_cents   := v_prize_cents - v_base_cents * v_winner_count;  -- remainder 0..(v_winner_count-1)
+
+        -- Loop through winners in a deterministic order (e.g., by board_id)
+        FOR v_winner_rec IN
+            SELECT board_id, telegram_id
+            FROM player_picks
+            WHERE game_id = v_game.game_id AND winner = TRUE
+            ORDER BY board_id   -- stable order
+            FOR UPDATE          -- lock each winner row
+        LOOP
+            v_i := v_i + 1;
+            -- First v_rem_cents winners get one extra cent
+            IF v_i <= v_rem_cents THEN
+                v_share_cents := v_base_cents + 1;
+            ELSE
+                v_share_cents := v_base_cents;
+            END IF;
+
+            -- Convert cents to NUMERIC(12,2) for wallet update
+            v_share_num := (v_share_cents::NUMERIC / 100)::NUMERIC(12,2);
+
+            -- Credit the winner's withdrawal wallet
+            UPDATE users
+            SET withdrawal_wallet = withdrawal_wallet + v_share_num
+            WHERE telegram_id = v_winner_rec.telegram_id;
+
+            -- Record in winners_history
+            INSERT INTO winners_history (game_id, telegram_id, board_id, credited_amount)
+            VALUES (v_game.game_id, v_winner_rec.telegram_id, v_winner_rec.board_id, v_share_num);
+        END LOOP;
+
+        v_result := jsonb_build_object(
+            'success', true,
+            'action', 'winners_credited',
+            'game_id', v_game.game_id,
+            'winner_count', v_winner_count,
+            'prize_amount', v_game.prize_amount
+        );
+
+    ELSE
+        -- No winners → add the entire prize to the game's house_profit
+        UPDATE games
+        SET house_profit = house_profit + v_game.prize_amount
+        WHERE game_id = v_game.game_id;
+
+        v_result := jsonb_build_object(
+            'success', true,
+            'action', 'house_credited',
+            'game_id', v_game.game_id,
+            'prize_amount', v_game.prize_amount
+        );
+    END IF;
+
+    -- 5. Advance game to winner_reveal with a 10‑second countdown
+    UPDATE games
+    SET phase = 'winner_reveal',
+        winner_reveal_ends_at = NOW() + INTERVAL '10 seconds'
+    WHERE game_id = v_game.game_id;
+
+    -- 6. Return summary
+    RETURN v_result;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION create_next_game()
+RETURNS JSON
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+DECLARE
+    current_game_id   BIGINT;
+    current_phase     TEXT;
+    global_status     TEXT;
+    new_game_id       BIGINT;
+    new_phase         TEXT;
+    new_picking_ends  TIMESTAMPTZ;
+    config_record     RECORD;
+BEGIN
+    -- 1. Lock the latest game by its max id – this avoids concurrency issues
+    SELECT game_id, phase
+    INTO STRICT current_game_id, current_phase
+    FROM games
+    WHERE game_id = (SELECT max(game_id) FROM games)
+    FOR UPDATE;
+
+    -- 2. Verify the game is in winner_reveal (only then can we finish it)
+    IF current_phase != 'winner_reveal' THEN
+        RAISE EXCEPTION 'Current game phase is not winner_reveal (actual: %)', current_phase
+        USING HINT = 'Only a game in winner_reveal can be finished to create the next one';
+    END IF;
+
+    -- 3. Mark the current game as finished
+    UPDATE games
+    SET phase = 'finished',
+        finished_at = NOW()
+    WHERE game_id = current_game_id;
+
+    -- 4. Lock and read the global game status (prevents admin changes mid‑transaction)
+    SELECT status
+    INTO STRICT global_status
+    FROM game_status
+    WHERE id = 1
+    FOR UPDATE;
+
+    -- 5. Insert the next game based on global_status
+    IF global_status = 'stopped' THEN
+        -- 5a. Maintenance game – set all NOT NULL columns explicitly
+        INSERT INTO games (
+            phase,
+            calling_started,
+            called_index,
+            active_players,
+            stake_amount,
+            minimum_player,
+            picking_ends_at,
+            shuffled_nums,
+            prize_amount,
+            house_profit,
+            winner_reveal_ends_at,
+            started_at
+        ) VALUES (
+            'maintenance',
+            FALSE,
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NOW()
+        )
+        RETURNING game_id, phase, picking_ends_at INTO new_game_id, new_phase, new_picking_ends;
+
+    ELSE
+        -- 5b. New picking game – global_status must be 'active'
+        -- Read the current game_config (row id=1 is guaranteed to exist)
+        SELECT stake_amount,
+               picking_countdown_end_time,
+               minimum_player
+        INTO STRICT config_record
+        FROM game_config
+        WHERE id = 1;
+
+        INSERT INTO games (
+            phase,
+            calling_started,
+            called_index,
+            active_players,
+            picking_ends_at,
+            minimum_player,
+            stake_amount,
+            shuffled_nums,
+            prize_amount,
+            house_profit,
+            winner_reveal_ends_at,
+            started_at
+        ) VALUES (
+            'picking',
+            FALSE,
+            0,
+            0,
+            NOW() + (config_record.picking_countdown_end_time || ' seconds')::INTERVAL,
+            config_record.minimum_player,
+            config_record.stake_amount,
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NOW()
+        )
+        RETURNING game_id, phase, picking_ends_at INTO new_game_id, new_phase, new_picking_ends;
+    END IF;
+
+    -- 6. Return the details of the newly created game as a JSON object
+    RETURN json_build_object(
+        'game_id', new_game_id,
+        'phase', new_phase,
+        'picking_ends_at', new_picking_ends
+    );
+
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE EXCEPTION 'Required configuration row missing (games, game_status, or game_config)'
+        USING HINT = 'Ensure tables are seeded with initial data';
+END;
+$$;
