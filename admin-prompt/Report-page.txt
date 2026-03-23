@@ -1,4 +1,0 @@
-Report page (super admin only)
-Table reading from admin_actions:
-Columns: action_id, admin_id, admin_username, action_type, target_type, target_id, payload (JSON, expandable), ip, user_agent, created_at.
-Search & date filters, server-side pagination.
