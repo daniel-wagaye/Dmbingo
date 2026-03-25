@@ -14,10 +14,10 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL!,
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
-  botToken: process.env.BOT_TOKEN!,
-  gameSecret: process.env.GAME_SECRET!,
-  registerStickerId: process.env.REGISTER_STICKER_ID || '',
-  referralStickerId: process.env.REFERRAL_STICKER_ID || '',
+  botToken: process.env.BOT_TOKEN!.trim(),
+  gameSecret: process.env.GAME_SECRET!.trim(),
+  registerStickerId: process.env.REGISTER_STICKER_ID?.trim() || '',
+  referralStickerId: process.env.REFERRAL_STICKER_ID?.trim() || '',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5175',
 
   // Rate limits (configurable via .env)
@@ -57,5 +57,5 @@ export const config = {
   dbQueryMaxRetries: parseInt(process.env.DB_QUERY_MAX_RETRIES || '4', 10),
   dbRetryBaseDelayMs: parseInt(process.env.DB_RETRY_BASE_DELAY_MS || '250', 10),
   rateLimitCleanupTimeUtc: process.env.RATE_LIMIT_CLEANUP_TIME_UTC || '00:00',
-  startCommandPhotoId: process.env.START_COMMAND_PHOTO_ID || '',
+  startCommandPhotoId: process.env.START_COMMAND_PHOTO_ID?.trim() || '',
 };

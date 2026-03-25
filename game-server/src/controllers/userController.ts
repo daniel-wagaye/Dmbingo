@@ -91,8 +91,13 @@ export async function register(req: Request, res: Response): Promise<void> {
 
 async function sendWelcomeMessage(telegramId: number, bonus: string): Promise<void> {
   try {
-    if (config.registerStickerId) {
-      await bot.telegram.sendSticker(telegramId, config.registerStickerId);
+    const stickerId = config.registerStickerId?.trim();
+    if (stickerId) {
+      try {
+        await bot.telegram.sendSticker(telegramId, stickerId);
+      } catch (stickerErr) {
+        console.error('[sendWelcomeMessage] Sticker failed:', stickerErr);
+      }
     }
     await bot.telegram.sendMessage(
       telegramId,
@@ -118,8 +123,13 @@ async function sendReferralRewardMessage(
   amount: string
 ): Promise<void> {
   try {
-    if (config.referralStickerId) {
-      await bot.telegram.sendSticker(referrerId, config.referralStickerId);
+    const stickerId = config.referralStickerId?.trim();
+    if (stickerId) {
+      try {
+        await bot.telegram.sendSticker(referrerId, stickerId);
+      } catch (stickerErr) {
+        console.error('[sendReferralRewardMessage] Sticker failed:', stickerErr);
+      }
     }
     await bot.telegram.sendMessage(
       referrerId,
