@@ -26,12 +26,18 @@ bot.command('start', async (ctx) => {
         [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
       ],
     };
-    if (config.startCommandPhotoId) {
-      await ctx.replyWithPhoto(config.startCommandPhotoId, {
+    const photoId = config.startCommandPhotoId.trim();
+    if (!photoId) {
+      await ctx.reply(text, { reply_markup: keyboard });
+      return;
+    }
+    try {
+      await ctx.replyWithPhoto(photoId, {
         caption: text,
         reply_markup: keyboard,
       });
-    } else {
+    } catch (photoErr) {
+      console.error('[bot] /start photo send failed, falling back to text:', photoErr);
       await ctx.reply(text, { reply_markup: keyboard });
     }
   } catch (err) {
