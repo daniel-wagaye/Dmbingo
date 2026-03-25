@@ -35,51 +35,62 @@ export function useGameRoom(): UseGameRoomReturn {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const mountedRef = useRef(true);
+  const roomRef = useRef<any>(null);
+
+  const attachListeners = useCallback((room: any) => {
+    roomRef.current = room;
+    const s = room.state as any;
+    if (s) {
+      setGameState(extractState(s));
+      setPicks(extractPicks(s.picks));
+    }
+    setConnected(true);
+    setLoading(false);
+
+    room.onStateChange((state: any) => {
+      if (!mountedRef.current) return;
+      setGameState(extractState(state));
+      setPicks(extractPicks(state.picks));
+    });
+
+    room.onLeave(() => {
+      if (!mountedRef.current) return;
+      setConnected(false);
+      roomRef.current = null;
+    });
+  }, []);
 
   const connect = useCallback(async () => {
     try {
       const room = await joinGameRoom();
       if (!mountedRef.current) return;
-
-      console.log('[useGameRoom] Connected to room. Initial state:', room.state);
-      setConnected(true);
-      setLoading(false);
-
-      // Read initial state
-      const s = room.state as any;
-      if (s) {
-        const initial = extractState(s);
-        console.log('[useGameRoom] Initial extracted state:', initial.phase, 'pickingEndsAt:', initial.pickingEndsAt, 'stake:', initial.stakeAmount);
-        setGameState(initial);
-        setPicks(extractPicks(s.picks));
-      }
-
-      // Listen for ALL state changes — Colyseus sends binary patches
-      room.onStateChange((state: any) => {
-        if (!mountedRef.current) return;
-        const extracted = extractState(state);
-        setGameState(extracted);
-        setPicks(extractPicks(state.picks));
-      });
-
-      room.onLeave(() => {
-        if (!mountedRef.current) return;
-        console.log('[useGameRoom] Disconnected from room');
-        setConnected(false);
-      });
+      attachListeners(room);
     } catch (err) {
       console.error('[useGameRoom] Failed to connect:', err);
       if (!mountedRef.current) return;
       setLoading(false);
     }
-  }, []);
+  }, [attachListeners]);
 
   useEffect(() => {
     mountedRef.current = true;
     connect();
 
+    // Reconnect when app returns from background (screen on, tab focus, etc.)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        // Force a fresh join — leaveGameRoom + joinGameRoom
+        leaveGameRoom();
+        roomRef.current = null;
+        setConnected(false);
+        connect();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       mountedRef.current = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
       leaveGameRoom();
     };
   }, [connect]);

@@ -124,7 +124,9 @@ export default function DepositModal({ onClose, onSuccess }: DepositModalProps) 
 
         <p style={{ color: 'orange' }}>
           <strong style={{ paddingLeft: '50px'}}>! ከ30 ብር በታች ማስገባት የተከለከለ ነው።</strong>
-          
+        </p>
+        <p style={{ color: 'orange' }}>
+          <strong style={{ paddingLeft: '51px'}}>! Other ባንክ ማስገባት የተከለከለ ነው።</strong>
         </p>
 
         {/* SMS / txn input */}

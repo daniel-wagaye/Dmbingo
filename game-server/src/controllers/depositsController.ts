@@ -18,16 +18,16 @@ export async function validateDeposit(req: Request, res: Response): Promise<void
       return;
     }
 
-    const trimmed = txnReference.trim();
+    const trimmed = txnReference.trim().toUpperCase();
     if (trimmed.length < 8 || trimmed.length > 40) {
       res.status(400).json({ error: 'INVALID_TXN_FORMAT', message: 'Invalid transaction reference' });
       return;
     }
 
     const result = await sql.begin(async (tx: any) => {
-      // 1. Find deposit row with lock
+      // 1. Find deposit row with lock (case-insensitive match)
       const depositRows = await tx`
-        SELECT * FROM deposits WHERE txn_reference = ${trimmed} FOR UPDATE
+        SELECT * FROM deposits WHERE UPPER(txn_reference) = ${trimmed} FOR UPDATE
       `;
 
       if (depositRows.length === 0) {
