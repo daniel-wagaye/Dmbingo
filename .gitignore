@@ -6,3 +6,22 @@ Thumbs.db
 **/.env.local
 **/.env.*.local
 dmbingo-support-bot/.env.example
+
+# Non-deployment files (prompts, docs, tools)
+500 Bingo cards/
+PG functions/
+admin-prompt/
+game prompt/
+Bingo Game.txt
+Game.txt
+README.md
+schema.txt
+telegram_message.sql
+dmbingo support bot microservice.txt
+the fix.txt
+config.yml
+Countdown-fix.txt
+Dab-fix.txt
+Detailed Colyseus Integration Guide.txt
+Winner-reveal-modal.txt
+DASHBOARD.txt
