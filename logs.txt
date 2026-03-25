@@ -1,297 +1,93 @@
-  minimum_player: 2,
+[game-server] Express + Colyseus running on http://localhost:10000
+[cleanup] Next rate limit cleanup scheduled at 2026-03-25T00:00:00.000Z (in 472min)
 Menu
-  new_picking_ends_at: '2026-03-25T08:12:15.777166+00:00'
+[health] DB health checks started (every 15s)
+[scheduler] transition_picking result: {
+  action: 'extended',
+  success: true,
+  player_count: 0,
+  minimum_player: 2,
+  new_picking_ends_at: '2026-03-24T16:09:32.96823+00:00'
 }
 [scheduler] Extended picking — 0/2 players. Rescheduling 40s
 [scheduler] Picking timer set for 40s
 [scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:12:55.884588+00:00'
+  action: 'extended',
+  success: true,
+  player_count: 0,
+  minimum_player: 2,
+  new_picking_ends_at: '2026-03-24T16:10:12.971978+00:00'
 }
 [scheduler] Extended picking — 0/2 players. Rescheduling 40s
 [scheduler] Picking timer set for 40s
 [scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:13:35.88446+00:00'
+  action: 'extended',
+  success: true,
+  player_count: 0,
+  minimum_player: 2,
+  new_picking_ends_at: '2026-03-24T16:10:52.973474+00:00'
 }
 [scheduler] Extended picking — 0/2 players. Rescheduling 40s
 [scheduler] Picking timer set for 40s
 [scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:14:15.885959+00:00'
+  action: 'extended',
+  success: true,
+  player_count: 0,
+  minimum_player: 2,
+  new_picking_ends_at: '2026-03-24T16:11:32.976402+00:00'
 }
 [scheduler] Extended picking — 0/2 players. Rescheduling 40s
 [scheduler] Picking timer set for 40s
+[GameRoom] Client joined: RL3IKbbx1. State: phase=picking, stake=10, pickingEndsAt=1774368692976
 [scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:14:55.893823+00:00'
+  action: 'extended',
+  success: true,
+  player_count: 0,
+  minimum_player: 2,
+  new_picking_ends_at: '2026-03-24T16:12:12.977905+00:00'
 }
 [scheduler] Extended picking — 0/2 players. Rescheduling 40s
 [scheduler] Picking timer set for 40s
-[scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:15:35.895157+00:00'
+[GameRoom] Client left: RL3IKbbx1
+[health] DB check failed (1x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+[health] DB check failed (2x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+[health] DB check failed (3x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+[health] DB check failed (4x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+[health] DB check failed (5x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+[health] DB check failed (6x): write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+ ELIFECYCLE  Command failed.
+==> Running 'pnpm start'
+game-server@0.1.0 start /opt/render/project/src/game-server
+tsx src/server.ts
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[startCommand] Failed to load status from DB: Error: write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+    at connectTimedOut (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:262:20)
+    at Timeout.done [as _onTimeout] (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:1059:8)
+    at listOnTimeout (node:internal/timers:607:11)
+    at process.processTimers (node:internal/timers:541:7)
+    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
+    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
+    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
+    at loadStartCommandStatus (/opt/render/project/src/game-server/src/services/startCommandService.ts:8:24) {
+  code: 'CONNECT_TIMEOUT',
+  errno: 'CONNECT_TIMEOUT',
+  address: 'aws-1-eu-central-1.pooler.supabase.com',
+  port: 5432
 }
-[scheduler] Extended picking — 0/2 players. Rescheduling 40s
-[scheduler] Picking timer set for 40s
-[scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:16:15.897368+00:00'
-}
-[scheduler] Extended picking — 0/2 players. Rescheduling 40s
-[scheduler] Picking timer set for 40s
-[GameRoom] Client joined: dkVtmuhLp. State: phase=picking, stake=10, pickingEndsAt=1774426575897
-[scheduler] transition_picking result: {
-  action: 'extended',
-  success: true,
-  player_count: 0,
-  minimum_player: 2,
-  new_picking_ends_at: '2026-03-25T08:16:55.899243+00:00'
-}
-[scheduler] Extended picking — 0/2 players. Rescheduling 40s
-[scheduler] Picking timer set for 40s
-[GameRoom] Client joined: nmuDBXFSc. State: phase=picking, stake=10, pickingEndsAt=1774426615899
-[transition_picking] Attempt 1/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-[transition_picking] Retrying in 2s...
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Attempt 2/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-[transition_picking] Retrying in 4s...
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Attempt 3/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-[transition_picking] Retrying in 6s...
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Attempt 4/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-[transition_picking] Retrying in 8s...
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Attempt 5/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] All 5 retries exhausted. Giving up.
-[scheduler] Picking timer set for 30s
-[scheduler] All retries failed for transition_picking. Rescheduling in 30s. PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Attempt 1/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-[transition_picking] Retrying in 2s...
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] Retrying in 4s...
-[transition_picking] Attempt 2/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-[transition_picking] Attempt 5/5 failed: PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-[scheduler] Picking timer set for 30s
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
-}
-[transition_picking] All 5 retries exhausted. Giving up.
-[scheduler] All retries failed for transition_picking. Rescheduling in 30s. PostgresError: Game is not in picking phase (current phase: started)
-    at ErrorResponse (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:815:30)
-    at handle (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:489:6)
-    at TLSSocket.data (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:324:9)
-    at TLSSocket.emit (node:events:508:20)
-    at addChunk (node:internal/streams/readable:564:12)
-    at readableAddChunkPushByteMode (node:internal/streams/readable:515:3)
-    at Readable.push (node:internal/streams/readable:395:5)
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:189:23)
-    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
-    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
-    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
-    at callTransitionPicking (/opt/render/project/src/game-server/src/services/gameService.ts:9:22) {
-  severity_local: 'ERROR',
-  severity: 'ERROR',
-  code: 'P0001',
-  hint: 'transition_picking() should only be called during picking phase.',
-  where: 'PL/pgSQL function transition_picking() line 20 at RAISE',
-  file: 'pl_exec.c',
-  line: '3911',
-  routine: 'exec_stmt_raise'
+[GameRoom] onCreate — room created, activeRoom set
+[colyseus] Game room pre-created, activeRoom: true
+[recovery] Running crash recovery (attempt 1)...
+[recovery] Attempt 1 failed: Error: write CONNECT_TIMEOUT aws-1-eu-central-1.pooler.supabase.com:5432
+    at connectTimedOut (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:262:20)
+    at Timeout.done [as _onTimeout] (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/connection.js:1059:8)
+    at listOnTimeout (node:internal/timers:607:11)
+    at process.processTimers (node:internal/timers:541:7)
+    at cachedError (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:170:23)
+    at new Query (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/query.js:36:24)
+    at Object.sql (/opt/render/project/src/game-server/node_modules/.pnpm/postgres@3.4.8/node_modules/postgres/cjs/src/index.js:112:11)
+    at callRecoverGameState (/opt/render/project/src/game-server/src/services/gameService.ts:29:22) {
+  code: 'CONNECT_TIMEOUT',
+  errno: 'CONNECT_TIMEOUT',
+  address: 'aws-1-eu-central-1.pooler.supabase.com',
+  port: 5432
 }

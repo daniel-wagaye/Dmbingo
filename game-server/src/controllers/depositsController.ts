@@ -79,7 +79,7 @@ export async function validateDeposit(req: Request, res: Response): Promise<void
       };
     });
 
-    // Send Telegram deposit confirmation (fire-and-forget)
+    // Send A Telegram deposit confirmation (fire-and-forget)
     if (result.status === 200 && result.body.success) {
       bot.telegram.sendMessage(
         telegramId,

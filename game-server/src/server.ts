@@ -13,7 +13,7 @@ import { startHealthChecks } from './utils/health';
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
 
-// ── /start command handler (always replies) ──
+// ─ /start command handler (always replies) ─
 bot.command('start', async (ctx) => {
   try {
     const userName = ctx.from?.first_name || 'ጓደኛዬ';
