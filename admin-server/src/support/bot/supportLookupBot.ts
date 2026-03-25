@@ -10,6 +10,11 @@ export class SupportLookupBot {
   constructor(repository: LookupRepository) {
     this.bot = new Telegraf(config.supportBotToken);
     this.lookupService = new SupportLookupService(repository);
+    this.bot.catch((error, ctx) => {
+      process.stderr.write(
+        `Support lookup bot handler error for update ${ctx.update.update_id}: ${String(error)}\n`
+      );
+    });
     this.registerHandlers();
   }
 

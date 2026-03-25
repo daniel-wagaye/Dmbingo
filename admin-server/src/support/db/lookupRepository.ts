@@ -176,7 +176,7 @@ export class LookupRepository {
     const [deposits, withdrawals, transfers, wins, referrals, coupons] = await Promise.all([
       this.pool.query<DepositHistoryRow>(
         `
-          SELECT created_at, amount, status, bank_name, txn_reference
+          SELECT created_at, amount, status, bank AS bank_name, txn_reference
           FROM deposits
           WHERE telegram_id = $1
           ORDER BY created_at DESC
@@ -186,7 +186,7 @@ export class LookupRepository {
       ),
       this.pool.query<WithdrawalHistoryRow>(
         `
-          SELECT created_at, amount, status, declined_reason, bank_name, account_holder_name, admin_tx_number
+          SELECT created_at, amount, status, declined_reason, bank AS bank_name, account_holder_name, admin_tx_number
           FROM withdrawals_request
           WHERE telegram_id = $1
           ORDER BY created_at DESC
