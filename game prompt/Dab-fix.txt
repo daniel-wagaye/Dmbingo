@@ -1,0 +1,111 @@
+Persistent Dab Marks with Auto‑Clean on New Game
+Goal
+Store user‑dabbed numbers per game so they survive app restarts.
+
+When a new game begins, automatically delete marks from the previous game and start fresh.
+
+Use a single localStorage key to keep things simple.
+
+How it works
+Store an object containing the current game ID and the set of marked numbers.
+
+On app load (or when the game changes), read the stored data.
+
+If the stored game ID matches the current game → restore marks.
+
+If it does not match → delete the stored data (clean it) and start with an empty set.
+
+Whenever the user toggles a mark, save the updated set together with the current game ID.
+
+Step‑by‑Step Implementation
+1. Create a storage utility (utils/marksStorage.ts)
+ts
+const STORAGE_KEY = 'bingoMarks';
+
+interface StoredMarks {
+  gameId: number;
+  marks: number[];
+}
+
+/**
+ * Save marks for a specific game.
+ * Overwrites any previous data stored under STORAGE_KEY.
+ */
+export function saveMarks(gameId: number, marks: Set<number> | number[]) {
+  const data: StoredMarks = {
+    gameId,
+    marks: Array.from(marks)
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+/**
+ * Load marks for the current game.
+ * If the stored gameId doesn't match the provided gameId,
+ * the storage is cleared and an empty Set is returned.
+ */
+export function loadMarks(gameId: number): Set<number> {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return new Set();
+
+  try {
+    const stored = JSON.parse(raw) as StoredMarks;
+    if (stored.gameId === gameId) {
+      return new Set(stored.marks);
+    } else {
+      // Game mismatch – clean up old data
+      localStorage.removeItem(STORAGE_KEY);
+      return new Set();
+    }
+  } catch {
+    // Corrupted data – remove it and start fresh
+    localStorage.removeItem(STORAGE_KEY);
+    return new Set();
+  }
+}
+2. Use in your started page component
+tsx
+import { useState, useEffect } from 'react';
+import { loadMarks, saveMarks } from '../utils/marksStorage';
+
+const StartedPage = () => {
+  const { currentGame } = useGame(); // provides { game_id, ... }
+  const [markedNumbers, setMarkedNumbers] = useState<Set<number>>(new Set());
+
+  // Load marks when the game changes (new game → clean slate)
+  useEffect(() => {
+    if (currentGame?.game_id) {
+      const marks = loadMarks(currentGame.game_id);
+      setMarkedNumbers(marks);
+    }
+  }, [currentGame?.game_id]);
+
+  // Save marks whenever they change (only for the current game)
+  useEffect(() => {
+    if (currentGame?.game_id && markedNumbers.size > 0) {
+      saveMarks(currentGame.game_id, markedNumbers);
+    }
+  }, [markedNumbers, currentGame?.game_id]);
+
+  const toggleMark = (number: number) => {
+    setMarkedNumbers(prev => {
+      const next = new Set(prev);
+      if (next.has(number)) {
+        next.delete(number);
+      } else {
+        next.add(number);
+      }
+      return next;
+    });
+  };
+
+  // ... render your bingo card, calling toggleMark on cell click ...
+};
+Key Points
+Single localStorage key – bingoMarks holds the latest game’s data.
+
+Auto‑clean – When a new game is detected (gameId mismatch), the old entry is removed immediately.
+
+Persistence – Marks survive app restarts as long as the same game is active.
+
+No orphaned data – Old game marks are deleted, not just ignored.

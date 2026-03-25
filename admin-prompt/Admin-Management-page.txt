@@ -1,0 +1,52 @@
+Admin Management Page (Super Admin only)
+Purpose: The Super Admin can create, edit, activate/deactivate withdrawal admins.
+UI / Layout:
+  - Page header: Admin Management. Top-right primary button: Create Admin.
+  - Main content: full-width table (server-side pagination, default page size 200) with columns:
+      - Admin ID
+      - Role (super_admin | withdrawal_admin)
+      - First name
+      - Last name
+      - Username
+      - Created At
+      - Is Active (toggle)
+      - Actions (Edit button)
+  - Table supports server-side search (username, first/last name) and sorting on created_at.
+  - Accessibility: keyboard-accessible modals, ARIA labels for controls.
+
+Create Admin Modal
+Fields:
+ - Role withdrawal_admin.
+ - Username — required, unique, 3–32 chars (A-Za-z0-9_-).
+ - First name — required.
+ - Last name — optional.
+ - Login Password — required, min 8 chars, must have uppercase letter, lowercase letter, special caracters and numbers.
+ - Action Password — required min 8 chars, must have uppercase letter, lowercase letter, special caracters and numbers.
+ - Super Admin Action Password — required to confirm creation.
+Buttons: Close, Create (disabled until client-side validation passes).
+Behavior: client-side validation → POST to server → on success close modal, toast success, refresh table.
+Store login/action passwords hashed (argon2)
+
+Edit Admin Modal
+ - Top: selector to choose what to edit: Username | Login password | Action password | All.
+ - Show inputs based on selection:
+   - Username → username input
+   - Login password → password input
+   - Action password → password input
+   - All → username + login password + action password
+ - Below inputs: Super Admin Action Password (required).
+ - Buttons: Close, Change (disabled until inputs + super-admin-action-password valid).
+ - On submit: validate and call server PUT; show inline server errors; toast & refresh row on success.
+  -  Store login/action passwords hashed (argon2)
+
+Activate / Deactivate Toggle
+ - Each row has an active/inactive toggle.
+ - When toggled, open a confirmation modal requiring Super Admin Action Password.
+ - Buttons: Close and OK.
+ - On OK: call server endpoint to change is_active. Server validates super admin action password and returns success/failure; update UI.
+
+Validation rules
+ - Username: unique, 3–32 chars, allowed A-Za-z0-9_-.
+ - Passwords: min 8 chars; require complexity (upper, lower, number, symbol) or at least 8 chars.
+ - Action password required for withdrawal_admin and super_admin.
+ - Re-verify Super Admin Action Password server-side for all sensitive operations.

@@ -1,0 +1,234 @@
+claim button:
+When the "Claim" button is clicked, display a modal with:
+- Header: "Enter Your Coupon Code"
+- Input field: Textarea for coupon code input (maximum 10 characters)
+- Buttons: 
+  - "Cancel" - closes the modal
+  - "Claim" - submits the coupon code
+- On "Claim" button click, send POST request to 'api coupon validate' with JSON:
+
+POST /api/coupons/redeem
+
+Headers (MANDATORY):
+Content-Type: application/json
+X-Telegram-Init-Data: <raw Telegram WebApp initData string>
+body
+  {
+    "coupon_code": "USER_INPUT_CODE",
+  }
+
+Backend processing:
+Endpoint
+POST /api/coupons/redeem
+Headers (MANDATORY):
+Content-Type: application/json
+X-Telegram-Init-Data: <raw Telegram WebApp initData string>
+Body: { "coupon_code": "STRING",}
+
+Backend processing (per-request)
+1. Read X-Telegram-Init-Data; if missing → 401.
+2. Verify initData HMAC per Telegram docs: build data_check_string from sorted params, secret=sha256(botToken), compute HMAC-SHA256, compare with hash using timing-safe compare. If invalid → 401. Extract telegram_id.
+3. Rate-limit via in-memory sliding-window keyed by telegram_id. If exceeded → 429.
+   // Defaults: LIMIT=3, WINDOW_MS=60000. Pseudocode:
+
+// In‑memory rate limiter for coupon redemption (per user)
+const couponRateLimitMap = new Map<number, number[]>(); // telegram_id -> timestamps
+const COUPON_RATE_LIMIT_WINDOW = 60_000; // 60 seconds
+const COUPON_RATE_LIMIT_MAX = 3; // max 3 attempts per minute
+
+export async function redeemCouponHandler(req: Request, res: Response) {
+  try {
+    // 1. Verify Telegram initData
+    const initData = req.headers['x-telegram-init-data'] as string;
+    if (!initData) {
+      return res.status(401).json({ error: 'MISSING_INITDATA' });
+    }
+
+    const telegramId = await verifyInitData(initData); // throws if invalid
+    if (!telegramId) {
+      // Silent ignore – return 204 as per spec
+      return res.status(204).end();
+    }
+
+    // 2. Rate limiting (per user, sliding window)
+    const now = Date.now();
+    let timestamps = couponRateLimitMap.get(telegramId) || [];
+    timestamps = timestamps.filter(ts => now - ts < COUPON_RATE_LIMIT_WINDOW);
+    if (timestamps.length >= COUPON_RATE_LIMIT_MAX) {
+      return res.status(429).json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many attempts. Try again later.' });
+    }
+    timestamps.push(now);
+    couponRateLimitMap.set(telegramId, timestamps);
+
+    // 3. Extract and validate request body
+    const { coupon_code } = req.body;
+    if (!coupon_code || typeof coupon_code !== 'string') {
+      return res.status(400).json({ error: 'MISSING_COUPON_CODE' });
+    }
+
+    // 4. Call the PostgreSQL function (no explicit transaction needed)
+    const result = await pool.query( // use drizzle
+      'SELECT redeem_coupon($1, $2) AS result',
+      [coupon_code.trim(), telegramId]
+    );
+    const dbResult = result.rows[0].result;
+
+    // 5. Map database result to HTTP response
+    if (dbResult.success) {
+      // Success – construct the user‑friendly message
+      const message = `Congratulations! You've received ${dbResult.credited_amount} ETB to your ${dbResult.credit_wallet} wallet from coupon ${dbResult.coupon_code}`;
+      return res.status(200).json({
+        success: true,
+        coupon_prize: dbResult.coupon_prize,
+        credited_amount: dbResult.credited_amount,
+        credit_wallet: dbResult.credit_wallet,
+        coupon_code: dbResult.coupon_code,
+        message
+      });
+    } else {
+      // Error – map business code to HTTP status and message
+      const errorMapping: Record<string, { status: number; message: string }> = {
+        INVALID_COUPON:        { status: 400, message: 'Invalid coupon' },
+        COUPON_EXPIRED:        { status: 400, message: 'Coupon has expired' },
+        COUPON_FULLY_REDEEMED: { status: 400, message: 'This coupon has been fully redeemed' },
+        COUPON_NOT_STARTED:    { status: 400, message: 'Coupon not yet valid' },
+        ALREADY_REDEEMED:      { status: 400, message: 'You have already redeemed this coupon' },
+        USER_NOT_FOUND:        { status: 400, message: 'User does not exist' },
+        INTERNAL_ERROR:        { status: 500, message: 'Something went wrong. Try again.' }
+      };
+
+      const mapped = errorMapping[dbResult.code] || { status: 500, message: 'Unknown error' };
+      return res.status(mapped.status).json({ error: mapped.message });
+    }
+  } catch (err) {
+    console.error('Unexpected error in redeemCouponHandler:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+//Frontend shows toast.success(message).
+
+PG FUNCTION:
+
+CREATE OR REPLACE FUNCTION redeem_coupon(
+    p_coupon_code  TEXT,
+    p_telegram_id  BIGINT
+) RETURNS JSONB
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_coupon       coupons%ROWTYPE;
+    v_claimed_id   BIGINT;
+BEGIN
+    -- 1. Lock the coupon row to prevent concurrent redemptions
+    SELECT * INTO v_coupon
+    FROM coupons
+    WHERE coupon_code = p_coupon_code
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'code', 'INVALID_COUPON'
+        );
+    END IF;
+
+    -- 2. Validate coupon state
+    IF v_coupon.status = 'expired' THEN
+        RETURN jsonb_build_object('success', false, 'code', 'COUPON_EXPIRED');
+    END IF;
+
+    IF v_coupon.status = 'finished' THEN
+        RETURN jsonb_build_object('success', false, 'code', 'COUPON_FULLY_REDEEMED');
+    END IF;
+
+    IF NOW() < v_coupon.starts_at THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'code', 'COUPON_NOT_STARTED',
+            'starts_at', v_coupon.starts_at
+        );
+    END IF;
+
+    IF NOW() >= v_coupon.expires_at THEN
+        RETURN jsonb_build_object('success', false, 'code', 'COUPON_EXPIRED');
+    END IF;
+
+    IF v_coupon.current_uses >= v_coupon.max_uses_total THEN
+        RETURN jsonb_build_object('success', false, 'code', 'COUPON_FULLY_REDEEMED');
+    END IF;
+
+    -- 3. Prevent double‑claim by the same user
+    PERFORM 1
+    FROM coupon_history
+    WHERE coupon_id = v_coupon.coupon_id
+      AND user_telegram_id = p_telegram_id
+    LIMIT 1;
+
+    IF FOUND THEN
+        RETURN jsonb_build_object('success', false, 'code', 'ALREADY_REDEEMED');
+    END IF;
+
+    -- 4. Atomically increment coupon usage and update status if needed
+    UPDATE coupons
+    SET
+        current_uses = current_uses + 1,
+        status = CASE
+            WHEN current_uses + 1 >= max_uses_total THEN 'finished'
+            ELSE status
+        END
+    WHERE coupon_id = v_coupon.coupon_id
+      AND current_uses < max_uses_total;
+
+    IF NOT FOUND THEN
+        -- Race condition: another request used the last slot just before us
+        RETURN jsonb_build_object('success', false, 'code', 'COUPON_FULLY_REDEEMED');
+    END IF;
+
+    -- 5. Credit the correct user wallet (defensively handle potential NULL)
+    IF v_coupon.credit_wallet = 'withdrawal' THEN
+        UPDATE users
+        SET withdrawal_wallet = COALESCE(withdrawal_wallet, 0) + v_coupon.coupon_prize
+        WHERE telegram_id = p_telegram_id;
+    ELSE
+        UPDATE users
+        SET non_withdrawal_wallet = COALESCE(non_withdrawal_wallet, 0) + v_coupon.coupon_prize
+        WHERE telegram_id = p_telegram_id;
+    END IF;
+
+    IF NOT FOUND THEN
+        -- User does not exist (should not happen after previous checks)
+        RETURN jsonb_build_object('success', false, 'code', 'USER_NOT_FOUND');
+    END IF;
+
+    -- 6. Record the claim in history
+    INSERT INTO coupon_history (
+        coupon_id,
+        user_telegram_id,
+        credited_amount,
+        credit_wallet,
+        claimed_at
+    ) VALUES (
+        v_coupon.coupon_id,
+        p_telegram_id,
+        v_coupon.coupon_prize,
+        v_coupon.credit_wallet,
+        NOW()
+    )
+    RETURNING claimed_id INTO v_claimed_id;
+
+    -- 7. Success – return raw data only
+    RETURN jsonb_build_object(
+        'success', true,
+        'coupon_prize', v_coupon.coupon_prize,
+        'credited_amount', v_coupon.coupon_prize,
+        'credit_wallet', v_coupon.credit_wallet,
+        'coupon_code', p_coupon_code
+    );
+
+EXCEPTION
+    WHEN unique_violation THEN
+        RETURN jsonb_build_object('success', false, 'code', 'ALREADY_REDEEMED');
+    WHEN OTHERS THEN
+        RETURN jsonb_build_object('success', false, 'code', 'INTERNAL_ERROR');
+END;
+$$;

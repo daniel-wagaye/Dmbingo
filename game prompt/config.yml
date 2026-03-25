@@ -1,0 +1,39 @@
+# Required: tunnel name or UUID
+tunnel: dmbingo-tunnel
+# OR use UUID directly: tunnel: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Required: path to your credentials JSON
+credentials-file: C:\Users\danie\.cloudflared\28daa0b5-cd4a-489c-8a19-ab88134178c4.json
+
+# Optional: log file (good for debugging)
+logfile: C:\Cloudflared\cloudflared.log
+loglevel: info
+
+# The ingress rules - this is the key part for multiple services
+ingress:
+  # Rule 1: Your original service on port 4000
+  - hostname: game-client.dmzone.top
+    service: http://localhost:5175
+
+  # Rule 2: Another app, e.g. Node.js / React dev server
+  - hostname: game-server.dmzone.top
+    service: http://localhost:3000
+
+  # Rule 3: API backend
+  - hostname: admin-client.dmzone.top
+    service: http://localhost:5174
+
+  # Rule 4: Admin panel or dashboard
+  - hostname: admin-server.dmzone.top
+    service: http://localhost:4000
+
+  # Rule 5: Another one, e.g. monitoring tool
+  - hostname: support-bot.dmzone.top
+    service: http://localhost:3001
+
+  # Optional: If any local service uses self-signed HTTPS, add this under its rule
+  #   originRequest:
+  #     noTLSVerify: true
+
+  # Catch-all rule - REQUIRED at the VERY END
+  - service: http_status:404

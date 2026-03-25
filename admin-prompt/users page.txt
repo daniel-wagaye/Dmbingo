@@ -1,0 +1,19 @@
+Users page (super admin only)
+Table columns: Telegram ID, First Name, Phone number, Username, Withdrawable, Non_Withdrawable, Referral Count, Created At, Actions.
+Search (server-side), filter by date range, sort by columns, page size fixed 200.
+Super Admin Action: Credit
+Right-most button Credit.
+Modal:
+Password input — admin action password 
+Input (number) — amount to credit (required)
+selector (wallet) — Withdrawal Wallet / Non-Withdrawal Wallet (required)
+Buttons: Close (dismiss), Approve
+Approve validation: amount > 0, wallet selected, admin enters nothing else.
+On approve verify password; if correct → POST /admin/credit
+DB changes:
+INSERT INTO admin_credit_history (telegram_id, amount, credited_wallet, created_at)
+Update users wallet field (withdrawable or non_withdrawable) += amount
+Send user Telegram message:
+Congratulation
+You just get {amount} Birr to Your wallet.
+Log action to admin_actions.

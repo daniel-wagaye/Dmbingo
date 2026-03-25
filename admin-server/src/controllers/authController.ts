@@ -9,7 +9,8 @@ import {
   refreshAdminToken,
 } from '../services/authService';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isSecure = process.env.NODE_ENV === 'production' ||
+  (process.env.ADMIN_CLIENT_ORIGIN ?? '').startsWith('https');
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
 const checkRateLimit = (key: string, limit: number, windowMs: number) => {
@@ -26,27 +27,29 @@ const checkRateLimit = (key: string, limit: number, windowMs: number) => {
   return true;
 };
 
+const cookieSameSite: 'none' | 'lax' = isSecure ? 'none' : 'lax';
+
 const setAuthCookies = (
   res: Response,
   tokens: { accessToken: string; refreshToken: string }
 ) => {
   res.cookie('admin_access_token', tokens.accessToken, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: isSecure,
+    sameSite: cookieSameSite,
     maxAge: 15 * 60 * 1000,
   });
   res.cookie('admin_refresh_token', tokens.refreshToken, {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: isSecure,
+    sameSite: cookieSameSite,
     maxAge: 24 * 60 * 60 * 1000,
   });
 };
 
 const clearAuthCookies = (res: Response) => {
-  res.clearCookie('admin_access_token');
-  res.clearCookie('admin_refresh_token');
+  res.clearCookie('admin_access_token', { httpOnly: true, secure: isSecure, sameSite: cookieSameSite });
+  res.clearCookie('admin_refresh_token', { httpOnly: true, secure: isSecure, sameSite: cookieSameSite });
 };
 
 export const login = async (req: Request, res: Response) => {

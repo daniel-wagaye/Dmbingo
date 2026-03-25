@@ -149,8 +149,8 @@
   "support_id_helper": "Share this with our support team to get help.",
   "support_instructions_title": "How to Use DM Bingo",
   "support_instr_register": "Open the app from the DMbingo Telegram bot. You'll be prompted to share your phone number to register. Tap Share to complete registration.",
-  "support_instr_deposit": "Tap Deposit on the dashboard. Copy one of the bank account numbers shown, send the money via your bank app, then paste the SMS or transaction number and tap Validate.",
-  "support_instr_withdraw": "Tap Withdraw. Enter the amount (min 100 ETB), your bank details, and tap Request Withdrawal. Processing may take a few minutes.",
-  "support_instr_transfer": "Tap Transfer. Choose the wallet source, enter the amount (10–1000), the recipient's phone number (09/07...), and tap Send. A 2% fee applies.",
-  "support_instr_play": "Tap the Play button to join a live game. Pick a board number during the picking phase. When the game starts, numbers are called automatically. Mark your card and tap BINGO! when you have a winning pattern."
+  "support_instr_deposit": "Tap Deposit on the dashboard. Copy one of the bank account numbers shown, send the money via your bank app, then paste the SMS or transaction number and tap Validate. \n !Other bank deposits are not allowed.",
+  "support_instr_withdraw": "Tap Withdraw on the dashboard. Enter the amount (min 100 ETB), your bank details, and tap Request Withdrawal. Processing may take a few minutes.",
+  "support_instr_transfer": "Tap Transfer on the dashboard. Choose the wallet source, enter the amount (10–1000), the recipient's phone number (09/07...), and tap Send. Fee will be deducted from the transferred amount.",
+  "support_instr_play": "Tap the Play sign button on the dashboard to join a live game. Pick a board number during the picking phase. When the game starts, numbers are called automatically. Mark your card and tap BINGO! when you have a winning pattern."
 }

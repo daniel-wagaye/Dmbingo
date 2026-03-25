@@ -1,0 +1,10 @@
+Referral History page (Super Admin)
+Title: Referral History (Read only)
+Top actions
+ - Search: by referrer_id or referred_user_id (server side).
+ - Filters: Date range, rewarded (true/false).
+ - Pagination: server-side (default 200 rows/page).
+
+Table columns
+Referral ID | Referrer| Referred | Rewarded | Rewarded Amount | Created At
+

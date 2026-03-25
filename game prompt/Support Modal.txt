@@ -1,0 +1,44 @@
+1.4. Support Modal
+UI (Frontend)
+- Modal title: Support
+- Modal opens from dashboard
+- Clean, frosted-glass style container
+
+A) Support Contacts (static)
+- Show two separate frosted cards, each clickable:
+  - @danielwagaye
+  - @Natii_lala
+- Clicking a username opens the Telegram chat (t.me/username)
+- Purpose: direct contact with support/admins
+
+B) User Support ID (copyable)
+- Label: Your Support ID
+- Display the user’s telegram_id (read-only, selectable)
+- Copy button (📋) placed on the right of the ID
+
+Behavior
+- On click:
+  - Copy the ID to clipboard
+  - Copy icon changes to a check mark (✅) for 3 seconds
+  - After 2 seconds, revert back to copy icon
+- Small helper text under the ID:
+  - Share this with our support team to get help.
+- If ID is missing:
+  - Show —
+  - Disable copy button
+
+Data source
+- The Support ID must be filled from:
+  - users.telegram_id returned by the backend when the dashboard loads
+- Do not re-read Telegram WebApp init data once the user record is loaded
+
+C) App Usage Instructions (scrollable)
+- Show a scrollable instructions box under the Support ID
+- Content explains:
+  - How to register
+  - How to deposit
+  - How to withdraw
+  - How to transfer
+  - How to play DM Bingo
+- Use the provided guide text without changing its meaning
+- This section is read-only

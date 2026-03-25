@@ -1,0 +1,143 @@
+Sign in page:
+A secure and modern Sign page for the DM Bingo Admin Web App. This page will serve as the primary entry point for all admin roles.
+UI/UX and Styling
+Layout: Design a responsive, computer-first layout featuring a central login form presented as a glossy card.
+Theme: The page should have a clean dark textured background but also support a light theme option.
+Aesthetics: Use rounded corners and subtle shadows to create depth. The primary accent color should be neon orange, with cyan for secondary elements.
+Typography: Use the Poppins or Inter font.
+Form Fields: Include input fields for username and password, along with a primary action button labeled "Log In".
+under a clickable "Forgot Password" text.
+Authentication and Security Logic
+Credential Verification: Upon submission, the page will send the admin's credentials to the backend, which will verify them against the stored argon2 hash.
+JWT Issuance: On successful login, the backend will issue two tokens and store them in HTTP-only, Secure cookies:
+An Access Token with a short lifespan (15 minutes).
+A Refresh Token with a longer lifespan (1 day).
+Redirection: After a successful login, the user should be redirected to their role-specific default route.
+
+Super Admin & Admin Lockout / Recovery
+
+There is exactly one super_admin account. If that Super Admin accumulates 10 sequential failed login attempts (a successful login resets the failed counter), the account is immediately deactivated (is_active = false) and must be reactivated only by sending OTP code to their Email adress by clicking forget password.
+
+withdrawal_admin is locked after 5 sequential failed login attempts. Locking sets is_active = false and locked_at = now(). Only a Super Admin may reactivate them via the Admin Management page.
+
+A failed attempt is counted only if the submitted username exists in admins.username. Attempts with non-existent usernames must be handled identically from the client perspective (generic error) but must not increment any existing admin's failed counter.
+
+All lock/unlock/recovery/password-reset/login events are recorded in admin_actions with relevant metadata (action, admin_id, target_id, target_type, details JSON, ip_address, user_agent, created_at).
+
+Login attempt semantics
+On each login attempt:
+Look up admins by username. If no matching username, return a generic login failed response (do not increment or create any counters).
+2. If username exists and is_active = false:
+If role = super_admin return a response telling the client: "The account is deactivated".
+For other admins, return "Account locked — Reach out Super Admin for reactivation."
+Log the login attempt to admin_actions with action login_attempt and details { result: 'locked' }.
+3. If username exists and is_active = true, verify password (argon2).
+If password is correct:
+    - Reset failed_login_attempts = 0.
+    - Update last_login = now().
+    - Create admin_actions record: action login, details { result: 'success' }, plus ip_address and user_agent.
+If password is incorrect:
+    - Increment failed_login_attempts atomically for that admin row.
+    - Create admin_actions record: action login_attempt, details { result: 'bad_password', failed_login_attempts: <new_value> }, plus ip_address and user_agent.
+    - If the incremented failed_login_attempts reaches the lock threshold (10 for super_admin, 5 for others) then:
+         - Set is_active = false, set locked_at = now().
+         - Insert an admin_actions record: action account_locked, details { by: 'failed_attempts', threshold: <n>, failed_login_attempts: <n> }, plus ip_address and user_agent.
+Return generic login failed message.
+
+Forget Password flow (UI + backend contract, plain text)
+1. Trigger
+- On the sign-in card there is a clickable text button labeled: Forgot Password?
+- When clicked, the sign-in form switches to the Forgot Password flow (same card).
+2. Step A — Enter username
+- Show a single input: Username and a primary button: Continue.
+- Client POST /admin/forgot with { username }.
+- Backend behavior:
+  - If username not found → return 404 with { error: "unknown_username" }.
+    - Frontend shows toast.error("Unknown Username!").
+  - If username exists and role === "withdrawal_admin" and is_active === false:
+    - Return 200 with { status: "locked_withdrawal_admin" }.
+    - Frontend: show a green helper text under the username input: "Please reach out to Super Admin for reactivation." Do not offer an OTP/email path to withdrawal admins.
+  - If username exists and role === "withdrawal_admin" and is_active === true:
+    - Return 200 with { status: "active_withdrawal_admin" }.
+    - Frontend: Toast.error("Please contact Support") (no OTP flow).
+  - If username exists and role === "super_admin":
+    - Return 200 with { status: "super_admin" }.
+3. Step B — Confirm super admin email
+- If backend returned super_admin:
+  - Show second input field labeled "Enter your current email address".
+  - On submit, client POST /admin/forgot/verify-email with { username, email }.
+  - Backend checks email equality (case-insensitive) to the stored admins.email_address.
+    - If mismatch → return 400 { error: "email_mismatch" }. Frontend shows toast.success("A Link is send to Your email Adress seccesfully").(it will make an illusion that the hackers think that they entered correct email adress or will recieve a recovery link).
+    - If match → backend:
+      - Generate a numeric 6-digit OTP (random 000000–999999).
+      - Store OTP metadata in admin_otps (or similar): admin_id, purpose='reactivate', otp_hash (HMAC-SHA256 or bcrypt/argon2 of the OTP + server secret), expires_at = now + 5 minutes, is_active=true, attempts=0.
+      - Send OTP via configured email service Resend with a short message and mention the 5-minute expiry.
+      - Log an admin_actions record: action='forgot_password_sent', target_id=admin_id, details includes via: 'email'.
+      - Return 200 { status: "otp_sent" }.
+  - Frontend on success shows toast.success("A verification code has been sent to your email address.") and reveals the OTP entry UI.
+4. Step C — Enter OTP
+- UI: single input accepting exactly 6 numeric digits and a primary button Validate.
+- Also show:
+  - small text: "Didn't get it? Resend" (Resend disabled for 60 seconds after send).
+  - show OTP expiry countdown (derived from backend expires_at if provided).
+- On Validate click: client POST /admin/forgot/validate-otp with { username, otp }.
+- Backend validation rules:
+  - Lookup latest active admin_otps for admin_id + purpose 'reactivate'.
+  - If none found → return 400 { error: 'no_active_otp' }.
+  - If expires_at < now → mark OTP is_active=false, return 410 { error: 'otp_expired' }.
+  - If attempts >= 5 → mark is_active=false, return 429 { error: 'too_many_attempts' }.
+  - Compare OTP by hashing submitted OTP with same HMAC/secret and comparing otp_hash.
+    - If invalid → increment attempts, return 401 { error: 'invalid_otp', attempts_left: X }.
+    - If valid → mark OTP is_used=true, is_active=false.
+      - Reactivation logic: set admins.is_active = true, failed_login_attempts = 0, locked_at = NULL (only if account was deactivated by failed attempts).
+      - Log admin_actions: action='reactivate_via_otp', target_id=admin_id.
+      - Return 200 { status: 'reactivated', redirect: '/admin/dashboard', role: 'super_admin' }.
+- Frontend behavior:
+  - On invalid_otp show toast.error("Invalid code. X attempts left.").
+  - On otp_expired show toast.error("Code expired — please resend.") and reveal Resend control enabled.
+  - On too_many_attempts show toast.error("Too many attempts. Please contact support.").
+  - On success (200) → redirect the user to /admin/dashboard as Super Admin (do not reset the login password).
+5. Resend OTP
+- Client POST /admin/forgot/resend-otp with { username }.
+- Backend:
+  - Enforce resend cooldown (e.g., 60 seconds) and only 5 OTP email limit in 3 hours.
+  - Invalidate previous admin_otps for this admin_id/purpose and create a fresh OTP record (new otp_hash, new expires_at).
+  - Send email and log admin_actions: action='forgot_password_resent'.
+  - Return 200 { status: 'otp_resent', next_resend_allowed_at: <TIMESTAMPTZ> }.
+  - Frontend: disable Resend until next_resend_allowed_at.
+6. UX & Accessibility notes
+- All toasts and helper text must be accessible and announced by screen readers.
+- Modals and focus trapping are not required — the flow lives inside the login card — but ensure inputs are keyboard accessible and labelled (aria-label, aria-invalid when needed).
+- Error strings shown to the user should be user-friendly; internal error codes can be returned by API for logging.
+7. Security & audit considerations (must be implemented on backend)
+- Store OTP hashed (never store plaintext OTP).
+- OTP expiry: 5 minutes.
+- OTP attempts: max 5 attempts per OTP.
+- Resend cooldown: 60 seconds; daily resend limit (e.g., 5).
+- Rate-limit requests to /admin/forgot* endpoints to prevent enumeration/brute force.
+- Log every step in admin_actions (forgot_request, forgot_password_sent, forgot_password_resent, reactivate_via_otp, invalid_otp_attempt) with ip_address and user_agent.
+- Consider avoiding explicit “Unknown Username” replies to reduce user enumeration; if you must show it, do so consistently across your app.
+- Do not disclose full email addresses; show masked email only.
+8. Final UX phrases (exact copy)
+- Unknown username: toast.error("Unknown Username!") (or use the generic alternative described above).
+- Withdrawal admin locked hint: Please reach out to Super Admin for reactivation.
+- Email mismatch: toast.success("A Link is send to Your email Adress seccesfully").
+- OTP sent success: toast.success("A verification code has been sent to your email address.")
+- OTP validate success: toast.success("Verification successful — redirecting...")
+- OTP invalid: toast.error("Invalid code. X attempts left.")
+- OTP expired: toast.error("Code expired — please resend.")
+- Too many attempts/resend limit: toast.error("Too many attempts.")
+
+Super Admin reactivation of other admins (UI & server flow)
+On Admin Management page, Super Admin rows show lock status and lock history.
+To reactivate a locked admin:
+    1. Super Admin clicks the locked admin's row → clicks Reactivate button.
+    2. Modal appears: input Action Password (of the Super Admin) + optional checkbox Force password reset for target account (if checked, prompt to set temporary random password or force user to set on next login).
+    3. Submit POST /admin/reactivate with { target_admin_id, super_admin_action_password, force_password_reset: boolean }.
+    4. Server:
+       - Verify Super Admin's action password (argon2).
+       - If wrong → return 401, log admin_actions (action: 'reactivate_failed', details include target_admin_id).
+       - If correct:
+           - Update target admin: is_active = true, failed_login_attempts = 0, locked_at = NULL.
+           - Insert admin_actions record: action: 'reactivate_admin', target_id: <target_admin_id>, details { forced_reset: boolean }, ip, user_agent.
+    5. UI: On success the Admin Management table should update the admin row and append an audit entry to the lock/reactivation history panel.

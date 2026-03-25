@@ -1,0 +1,14 @@
+Transfer History Page (Super Admin Read-Only)
+
+Title: Transfer History (Read only)
+Top actions
+ - Search (server-side): by sender/receiver phone or telegram_id.
+ - Filters: Date range (from—to), Wallet (withdrawal / non_withdrawal).
+ - Pagination: server-side (default 200 rows/page).
+ - Export: CSV (date range + filters) — optional.
+
+Table columns
+ID | From (telegram_id / phone masked) | To (telegram_id / phone masked) | Wallet | Amount | Commission | Total | Created At
+
+ - Read-only: no inline actions. Clicking a row opens a details drawer (read-only) showing transfer_history raw fields and the created_at.
+

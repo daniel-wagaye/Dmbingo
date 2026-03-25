@@ -19,12 +19,12 @@ bot.command('start', async (ctx) => {
   if (!isStartCommandEnabled()) return;
   try {
     const userName = ctx.from?.first_name || 'ጓደኛዬ';
-    const text = `ሰላም! ${userName} እንኳን ደህና መጡ!\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n
+    const text = `ሰላም! ${userName}\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n
     💰 የሚጠብቅዎት:\n⚡️ ፈጣን ጨዋታዎች\n🎊 ትልቅ ሽልማቶች\n🎁 ቀን በቀን ትልቅ የቦነስ ስጦታወች በዚ  ግሩፕ ላይ ይለቀቃሉ\n💬Join our community to get daily reward's 💰\n🔥 አሁኑኑ ይጀምሩ እና ያሸንፉ! 🚀`;
     const keyboard = {
       inline_keyboard: [
+        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }], 
         [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
-        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }],
       ],
     };
     if (config.startCommandPhotoId) {

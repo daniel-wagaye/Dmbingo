@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import './Support.css';
 
 const SUPPORT_CONTACTS = [
-  { username: 'danielwagaye', display: '@danielwagaye' },
-  { username: 'Natii_lala', display: '@Natii_lala' },
+  { username: 'Dmbingo_support', display: '@Dmbingo_support' },
 ];
 
 interface SupportModalProps {
