@@ -3,12 +3,8 @@ import app, { markRuntimeDegraded, markRuntimeHealthy } from './app';
 import { config } from './config';
 import { pool } from './db/drizzle';
 import { registerSupportRoutes, startSupportRuntime, stopSupportRuntime } from './support';
-import { isStartCommandEnabled } from './services/startCommandService';
 
 const bootstrap = async (): Promise<void> => {
-  // Load start command status into memory cache on boot
-  await isStartCommandEnabled();
-
   const supportRuntime = await startSupportRuntime();
   registerSupportRoutes(app, supportRuntime.worker);
 

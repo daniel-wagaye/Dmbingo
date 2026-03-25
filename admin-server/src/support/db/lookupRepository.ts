@@ -4,6 +4,7 @@ import { config } from '../../config';
 export interface LookupUserProfile {
   telegramId: number;
   firstName: string;
+  username: string;
   phoneNumber: string;
   withdrawalWallet: string;
   nonWithdrawalWallet: string;
@@ -11,11 +12,22 @@ export interface LookupUserProfile {
   lastReferred: Date | null;
 }
 
-interface TimedAmountStatus {
+interface DepositRow {
+  createdAt: Date;
+  amount: string;
+  status: string;
+  bankName: string;
+  txnReference: string;
+}
+
+interface WithdrawalRow {
   createdAt: Date;
   amount: string;
   status: string;
   declinedReason?: string | null;
+  bankName: string;
+  accountHolderName: string;
+  adminTxNumber: string;
 }
 
 interface TransferRow {
@@ -46,8 +58,8 @@ interface CouponRow {
 }
 
 export interface LookupHistory {
-  deposits: TimedAmountStatus[];
-  withdrawals: TimedAmountStatus[];
+  deposits: DepositRow[];
+  withdrawals: WithdrawalRow[];
   transfers: TransferRow[];
   wins: WinRow[];
   referrals: ReferralRow[];
@@ -57,6 +69,7 @@ export interface LookupHistory {
 interface UserProfileRow {
   telegram_id: string | number;
   first_name: string | null;
+  username: string | null;
   phone_number: string | null;
   withdrawal_wallet: string | number | null;
   non_withdrawal_wallet: string | number | null;
@@ -68,6 +81,8 @@ interface DepositHistoryRow {
   created_at: Date | string;
   amount: string | number | null;
   status: string | null;
+  bank_name: string | null;
+  txn_reference: string | null;
 }
 
 interface WithdrawalHistoryRow {
@@ -75,6 +90,9 @@ interface WithdrawalHistoryRow {
   amount: string | number | null;
   status: string | null;
   declined_reason: string | null;
+  bank_name: string | null;
+  account_holder_name: string | null;
+  admin_tx_number: string | null;
 }
 
 interface TransferHistoryRow {
@@ -128,7 +146,7 @@ export class LookupRepository {
   async getUserProfile(telegramId: number): Promise<LookupUserProfile | null> {
     const result = await this.pool.query<UserProfileRow>(
       `
-        SELECT telegram_id, first_name, phone_number, withdrawal_wallet, non_withdrawal_wallet,
+        SELECT telegram_id, first_name, username, phone_number, withdrawal_wallet, non_withdrawal_wallet,
                referral_count, last_referred_date
         FROM users
         WHERE telegram_id = $1
@@ -145,6 +163,7 @@ export class LookupRepository {
     return {
       telegramId: Number(row.telegram_id),
       firstName: row.first_name ?? '-',
+      username: row.username ?? '-',
       phoneNumber: row.phone_number ?? '-',
       withdrawalWallet: Number(row.withdrawal_wallet ?? 0).toFixed(2),
       nonWithdrawalWallet: Number(row.non_withdrawal_wallet ?? 0).toFixed(2),
@@ -157,7 +176,7 @@ export class LookupRepository {
     const [deposits, withdrawals, transfers, wins, referrals, coupons] = await Promise.all([
       this.pool.query<DepositHistoryRow>(
         `
-          SELECT created_at, amount, status
+          SELECT created_at, amount, status, bank_name, txn_reference
           FROM deposits
           WHERE telegram_id = $1
           ORDER BY created_at DESC
@@ -167,7 +186,7 @@ export class LookupRepository {
       ),
       this.pool.query<WithdrawalHistoryRow>(
         `
-          SELECT created_at, amount, status, declined_reason
+          SELECT created_at, amount, status, declined_reason, bank_name, account_holder_name, admin_tx_number
           FROM withdrawals_request
           WHERE telegram_id = $1
           ORDER BY created_at DESC
@@ -236,12 +255,17 @@ export class LookupRepository {
         createdAt: new Date(row.created_at),
         amount: Number(row.amount ?? 0).toFixed(2),
         status: row.status ?? '-',
+        bankName: row.bank_name ?? '-',
+        txnReference: row.txn_reference ?? '-',
       })),
       withdrawals: withdrawals.rows.map((row) => ({
         createdAt: new Date(row.created_at),
         amount: Number(row.amount ?? 0).toFixed(2),
         status: row.status ?? '-',
         declinedReason: row.declined_reason ?? null,
+        bankName: row.bank_name ?? '-',
+        accountHolderName: row.account_holder_name ?? '-',
+        adminTxNumber: row.admin_tx_number ?? '-',
       })),
       transfers: transfers.rows.map((row) => ({
         createdAt: new Date(row.created_at),

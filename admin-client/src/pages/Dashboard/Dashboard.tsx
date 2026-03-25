@@ -121,30 +121,9 @@ type ModalState = {
   updateCardOnSuccess: boolean;
 };
 
-const fetchStartCommand = async (): Promise<boolean> => {
-  const response = await fetch(`${API_BASE}/admin/start-command`, { credentials: 'include' });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? 'Failed to load');
-  return !!data.enabled;
-};
-
-const toggleStartCommand = async (enabled: boolean): Promise<boolean> => {
-  const response = await fetch(`${API_BASE}/admin/start-command`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error ?? 'Failed to update');
-  return !!data.enabled;
-};
-
 const Dashboard = () => {
   const [summary, setSummary] = useState<DashboardSummary>(defaultSummary);
   const [loading, setLoading] = useState(false);
-  const [startCmdEnabled, setStartCmdEnabled] = useState(false);
-  const [startCmdLoading, setStartCmdLoading] = useState(false);
   const [modal, setModal] = useState<ModalState>({
     open: false,
     statKey: null,
@@ -163,33 +142,15 @@ const Dashboard = () => {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      fetchSummary(),
-      fetchStartCommand().catch(() => false),
-    ])
-      .then(([data, cmdEnabled]) => {
+    fetchSummary()
+      .then((data) => {
         setSummary(data);
-        setStartCmdEnabled(cmdEnabled);
       })
       .catch((error) => {
         toast.error(error instanceof Error ? error.message : 'Failed to load dashboard');
       })
       .finally(() => setLoading(false));
   }, []);
-
-  const handleStartCmdToggle = async () => {
-    if (startCmdLoading) return;
-    setStartCmdLoading(true);
-    try {
-      const newValue = await toggleStartCommand(!startCmdEnabled);
-      setStartCmdEnabled(newValue);
-      toast.success(newValue ? 'Start command enabled' : 'Start command disabled');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to toggle');
-    } finally {
-      setStartCmdLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (!modal.open) return;
@@ -356,38 +317,7 @@ const Dashboard = () => {
           <h1>Dashboard</h1>
           <p className="dashboard-subtitle">High-level performance overview</p>
         </div>
-        <div className="dashboard-status" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-            <span>Start Command</span>
-            <button
-              type="button"
-              onClick={handleStartCmdToggle}
-              disabled={startCmdLoading}
-              style={{
-                width: '44px',
-                height: '24px',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: startCmdLoading ? 'wait' : 'pointer',
-                background: startCmdEnabled ? '#22c55e' : '#4b5563',
-                position: 'relative',
-                transition: 'background 0.2s',
-              }}
-            >
-              <span
-                style={{
-                  position: 'absolute',
-                  top: '2px',
-                  left: startCmdEnabled ? '22px' : '2px',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '50%',
-                  background: '#fff',
-                  transition: 'left 0.2s',
-                }}
-              />
-            </button>
-          </label>
+        <div className="dashboard-status">
           {loading ? <span className="dashboard-pill">Loading...</span> : null}
         </div>
       </div>

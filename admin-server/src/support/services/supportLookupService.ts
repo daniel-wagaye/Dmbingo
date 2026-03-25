@@ -27,6 +27,7 @@ const renderProfile = (profile: LookupUserProfile): string[] => {
   const lines = [
     `Telegram ID: ${profile.telegramId}`,
     `Name: ${escapeHtml(profile.firstName)}`,
+    `Username: ${escapeHtml(profile.username)}`,
     `Phone: ${toSpoiler(profile.phoneNumber)}`,
     `Withdrawal Wallet: ${escapeHtml(profile.withdrawalWallet)}`,
     `Non-Withdrawal Wallet: ${escapeHtml(profile.nonWithdrawalWallet)}`,
@@ -39,13 +40,13 @@ const renderProfile = (profile: LookupUserProfile): string[] => {
 const renderHistory = (history: LookupHistory, historyLimit: number): string[] => {
   const depositRows = history.deposits.map(
     (row) =>
-      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(row.status)}`
+      `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(row.status)} | Bank: ${escapeHtml(row.bankName)} | Txn: ${escapeHtml(row.txnReference)}`
   );
   const withdrawalRows = history.withdrawals.map(
     (row) =>
       `${escapeHtml(formatDateTime(row.createdAt))} | ${escapeHtml(row.amount)} | ${escapeHtml(
         row.status
-      )} | ${escapeHtml(row.declinedReason ?? '-')}`
+      )} | Bank: ${escapeHtml(row.bankName)} | Holder: ${escapeHtml(row.accountHolderName)} | AdminTx: ${escapeHtml(row.adminTxNumber)} | ${escapeHtml(row.declinedReason ?? '-')}`
   );
   const transferRows = history.transfers.map(
     (row) =>

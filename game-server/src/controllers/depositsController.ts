@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
+import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import { isAllowed } from '../middlewares/rateLimitPerUser';
 import { sql } from '../db/drizzle';
+
+const bot = new Telegraf(config.botToken);
 
 export async function validateDeposit(req: Request, res: Response): Promise<void> {
   try {
@@ -75,6 +78,22 @@ export async function validateDeposit(req: Request, res: Response): Promise<void
         },
       };
     });
+
+    // Send Telegram deposit confirmation (fire-and-forget)
+    if (result.status === 200 && result.body.success) {
+      bot.telegram.sendMessage(
+        telegramId,
+        `✅ የገቢ ማረጋገጫ!\n\n💰 ${result.body.amount} ብር ወደ ዋሌትዎ ገብቷል።\n\nአሁኑኑ ይጫወቱ እና ያሸንፉ! 🎱`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
+              [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }],
+            ],
+          },
+        }
+      ).catch((e) => console.error('[deposit] telegram msg failed:', e));
+    }
 
     res.status(result.status).json(result.body);
   } catch (err) {

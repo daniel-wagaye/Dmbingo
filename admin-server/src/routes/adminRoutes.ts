@@ -52,7 +52,6 @@ import {
   listWithdrawals,
 } from '../controllers/withdrawController';
 import { creditUser, listUsers } from '../controllers/userController';
-import { isStartCommandEnabled, setStartCommandEnabled } from '../services/startCommandService';
 
 const router = Router();
 
@@ -305,29 +304,5 @@ router.post('/game-config/update', adminAuth, updateGameConfig);
 router.post('/game-status/start', adminAuth, startGameStatus);
 router.post('/game-status/stop', adminAuth, stopGameStatus);
 router.post('/game-control/start', adminAuth, wakeUpGame);
-
-router.get('/start-command', adminAuth, requireAdminRole(['super_admin']), async (_req, res) => {
-  try {
-    const enabled = await isStartCommandEnabled();
-    return res.json({ enabled });
-  } catch (err) {
-    console.error('[start-command] GET failed:', err);
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-router.post('/start-command', adminAuth, requireAdminRole(['super_admin']), async (req, res) => {
-  try {
-    const { enabled } = req.body;
-    if (typeof enabled !== 'boolean') {
-      return res.status(400).json({ error: 'invalid_body', message: 'enabled must be a boolean' });
-    }
-    await setStartCommandEnabled(enabled);
-    return res.json({ success: true, enabled });
-  } catch (err) {
-    console.error('[start-command] POST failed:', err);
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
 
 export default router;

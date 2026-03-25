@@ -6,7 +6,6 @@ import { config } from './config';
 import app from './app';
 import { GameRoom, activeRoom } from './colyseus/GameRoom';
 import { callRecoverGameState } from './services/gameService';
-import { loadStartCommandStatus, isStartCommandEnabled } from './services/startCommandService';
 import { schedulePickingTimer } from './jobs/scheduler';
 import { startCleanupCron } from './jobs/cleanupCron';
 import { startHealthChecks } from './utils/health';
@@ -14,16 +13,14 @@ import { startHealthChecks } from './utils/health';
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
 
-// ── /start command handler (zero-cost when disabled — reads from memory) ──
+// ── /start command handler (always replies) ──
 bot.command('start', async (ctx) => {
-  if (!isStartCommandEnabled()) return;
   try {
     const userName = ctx.from?.first_name || 'ጓደኛዬ';
-    const text = `ሰላም! ${userName}\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n
-    💰 የሚጠብቅዎት:\n⚡️ ፈጣን ጨዋታዎች\n🎊 ትልቅ ሽልማቶች\n🎁 ቀን በቀን ትልቅ የቦነስ ስጦታወች በዚ  ግሩፕ ላይ ይለቀቃሉ\n💬Join our community to get daily reward's 💰\n🔥 አሁኑኑ ይጀምሩ እና ያሸንፉ! 🚀`;
+    const text = `ሰላም! ${userName}\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n💰 የሚጠብቅዎት:\n⚡️ ፈጣን ጨዋታዎች\n🎊 ትልቅ ሽልማቶች\n🎁 ቀን በቀን ትልቅ የቦነስ ስጦታወች በዚ  ግሩፕ ላይ ይለቀቃሉ\n💬Join our community to get daily reward's 💰\n🔥 አሁኑኑ ይጀምሩ እና ያሸንፉ! 🚀`;
     const keyboard = {
       inline_keyboard: [
-        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }], 
+        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }],
         [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
       ],
     };
@@ -99,9 +96,6 @@ async function sendWinnerNotifications(winners: any[]): Promise<void> {
 }
 
 async function initializeAndRecover(): Promise<void> {
-  // Load start command toggle into memory (one-time DB read)
-  await loadStartCommandStatus();
-
   // Pre-create the room so activeRoom is set before any client connects
   await matchMaker.createRoom('game_room', {});
   console.log('[colyseus] Game room pre-created, activeRoom:', !!activeRoom);
