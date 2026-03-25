@@ -59,6 +59,8 @@ export const startSupportRuntime = async (): Promise<SupportRuntime> => {
         process.stderr.write(`Support lookup bot failed to start: ${String(error)}\n`);
       }
     );
+  } else {
+    process.stdout.write('Support lookup bot disabled: SUPPORT_BOT_TOKEN is not set\n');
   }
   const recoveryTimer = setInterval(() => {
     void worker.runRecovery();

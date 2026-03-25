@@ -35,7 +35,7 @@ export const config = {
   resendApiKey: getEnv('RESEND_API_KEY'),
   resendFrom: getEnv('RESEND_FROM', 'noreply@dmbingo.app'),
   telegramBotToken: getEnv('TELEGRAM_BOT_TOKEN'),
-  supportBotToken: getEnv('SUPPORT_BOT_TOKEN', getEnv('TELEGRAM_BOT_TOKEN')),
+  supportBotToken: getEnv('SUPPORT_BOT_TOKEN'),
   webhookPassKey: getEnv('WEBHOOK_PASS_KEY'),
   webhookBodyLimit: getEnv('WEBHOOK_BODY_LIMIT', '100kb'),
   globalRateLimitWindowMs: getNumber('GLOBAL_RATE_LIMIT_WINDOW_MS', 60000),

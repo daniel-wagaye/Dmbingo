@@ -50,6 +50,12 @@ export const config = {
   winnerAcceptanceWindowMs: parseInt(process.env.WINNER_ACCEPTANCE_WINDOW_MS || '1000', 10),
   winnerRevealDurationMs: parseInt(process.env.WINNER_REVEAL_DURATION_MS || '10000', 10),
   maxRecoveryRetries: parseInt(process.env.MAX_RECOVERY_RETRIES || '5', 10),
+  dbMaxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || '23', 10),
+  dbIdleTimeoutSeconds: parseInt(process.env.DB_IDLE_TIMEOUT_SECONDS || '30', 10),
+  dbConnectTimeoutSeconds: parseInt(process.env.DB_CONNECT_TIMEOUT_SECONDS || '30', 10),
+  dbMaxLifetimeSeconds: parseInt(process.env.DB_MAX_LIFETIME_SECONDS || '3600', 10),
+  dbQueryMaxRetries: parseInt(process.env.DB_QUERY_MAX_RETRIES || '4', 10),
+  dbRetryBaseDelayMs: parseInt(process.env.DB_RETRY_BASE_DELAY_MS || '250', 10),
   rateLimitCleanupTimeUtc: process.env.RATE_LIMIT_CLEANUP_TIME_UTC || '00:00',
   startCommandPhotoId: process.env.START_COMMAND_PHOTO_ID || '',
 };

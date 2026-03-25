@@ -12,6 +12,8 @@ import { startHealthChecks } from './utils/health';
 
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
+let botLaunched = false;
+let botLaunchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ─ /start command handler (always replies) ─
 bot.command('start', async (ctx) => {
@@ -37,10 +39,34 @@ bot.command('start', async (ctx) => {
   }
 });
 
-bot.launch({ dropPendingUpdates: true }).then(
-  () => console.log('[bot] Telegram bot launched (polling)'),
-  (err) => console.error('[bot] Failed to launch:', err)
-);
+const scheduleBotLaunchRetry = (attempt: number) => {
+  if (botLaunched || botLaunchTimer) {
+    return;
+  }
+  const delay = Math.min(3000 * attempt, 30000);
+  botLaunchTimer = setTimeout(() => {
+    botLaunchTimer = null;
+    void launchBotPolling(attempt + 1);
+  }, delay);
+};
+
+const launchBotPolling = async (attempt = 1): Promise<void> => {
+  if (botLaunched) {
+    return;
+  }
+  try {
+    await bot.launch({ dropPendingUpdates: true });
+    botLaunched = true;
+    console.log('[bot] Telegram bot launched (polling)');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('terminated by other getUpdates request')) {
+      console.error('[bot] Polling conflict (409). Another process is using this bot token.');
+    }
+    console.error(`[bot] Failed to launch (attempt ${attempt}):`, err);
+    scheduleBotLaunchRetry(attempt);
+  }
+};
 const httpServer = http.createServer(app);
 
 // ── HTTP server error resilience ──
@@ -157,10 +183,35 @@ async function initializeAndRecover(): Promise<void> {
       return; // success
     } catch (err) {
       console.error(`[recovery] Attempt ${attempt} failed:`, err);
-      if (attempt >= config.maxRecoveryRetries) throw err;
+      if (attempt >= config.maxRecoveryRetries) {
+        if (activeRoom) {
+          activeRoom.setNewGame({
+            phase: 'maintenance',
+            picking_ends_at: null,
+            stake_amount: 0,
+            minimum_player: 0,
+          });
+        }
+        return;
+      }
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
+}
+
+let recoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRecoveryRetry(): void {
+  if (recoveryRetryTimer) {
+    return;
+  }
+  recoveryRetryTimer = setTimeout(async () => {
+    recoveryRetryTimer = null;
+    await initializeAndRecover();
+    if (activeRoom?.state.phase === 'maintenance') {
+      scheduleRecoveryRetry();
+    }
+  }, 30000);
 }
 
 // Global safety nets — prevent unhandled errors from crashing the process
@@ -173,12 +224,25 @@ process.on('unhandledRejection', (reason) => {
 
 initializeAndRecover()
   .then(async () => {
+    void launchBotPolling();
     await gameServer.listen(PORT);
     console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
     startCleanupCron();
     startHealthChecks();
+    if (activeRoom?.state.phase === 'maintenance') {
+      scheduleRecoveryRetry();
+    }
   })
   .catch((err) => {
-    console.error('[recovery] All retries failed. Exiting.', err);
-    process.exit(1);
+    console.error('[recovery] Unexpected startup failure. Continuing in degraded mode.', err);
+    void launchBotPolling();
+    gameServer.listen(PORT).then(() => {
+      console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
+      startCleanupCron();
+      startHealthChecks();
+      scheduleRecoveryRetry();
+    }).catch((listenErr) => {
+      console.error('[startup] Failed to bind server:', listenErr);
+      process.exit(1);
+    });
   });
