@@ -29,7 +29,7 @@ export async function validateDeposit(txnReference: string): Promise<DepositVali
   });
 }
 
-// SMS parser regexes (exact patterns from spec)
+// SMS parser regexes (-exact patterns from spec-)
 const CBE_RE = /https:\/\/apps\.cbe\.com\.et:100\/\?id=([A-Za-z0-9]+)/i;
 const BOA_RE = /trx=([A-Za-z0-9]+)/i;
 const CBEBIRR_RE = /Txn ID ([A-Za-z0-9]+)/i;
