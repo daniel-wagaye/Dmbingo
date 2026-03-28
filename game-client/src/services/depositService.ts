@@ -33,7 +33,7 @@ export async function validateDeposit(txnReference: string): Promise<DepositVali
 const CBE_RE = /https:\/\/apps\.cbe\.com\.et:100\/\?id=([A-Za-z0-9]+)/i;
 const BOA_RE = /trx=([A-Za-z0-9]+)/i;
 const CBEBIRR_RE = /Txn ID ([A-Za-z0-9]+)/i;
-const TELEBIRR_RE = /transaction number is[:\s]+([A-Za-z0-9]+)/i;
+const TELEBIRR_RE = /(?:transaction number is[:\s]+|የሂሳብ እንቅስቃሴ ቁጥርዎ[:\s]+)([A-Za-z0-9]+)/i;
 
 export function parseSmsForTxnReference(sms: string): string | null {
   const patterns = [CBE_RE, BOA_RE, CBEBIRR_RE, TELEBIRR_RE];
