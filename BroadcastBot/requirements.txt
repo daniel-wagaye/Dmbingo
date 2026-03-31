@@ -1,0 +1,6 @@
+pyroblack
+tgcrypto
+aiofiles
+motor
+dnspython
+python-dotenv

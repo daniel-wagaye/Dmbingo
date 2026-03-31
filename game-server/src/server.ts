@@ -12,67 +12,6 @@ import { startHealthChecks } from './utils/health';
 
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
-let botLaunched = false;
-let botLaunchTimer: ReturnType<typeof setTimeout> | null = null;
-
-// ─ /start command handler (always replies) ─
-bot.command('start', async (ctx) => {
-  try {
-    const userName = ctx.from?.first_name || 'ጓደኛዬ';
-    const text = `ሰላም! ${userName}\n🔥 ወደ DMbingo  እንኳን በደህና መጡ! 🎮✨\n\n🚀 ተጫወቱ፣ አሸንፉ እና ትልቅ ሽልማት ያግኙ! 💎\n\n🎯 የእርስዎ እድል ዛሬ ይጀምራል! 🌟\n💰 የሚጠብቅዎት:\n⚡️ ፈጣን ጨዋታዎች\n🎊 ትልቅ ሽልማቶች\n🎁 ቀን በቀን ትልቅ የቦነስ ስጦታወች በዚ  ግሩፕ ላይ ይለቀቃሉ\n💬Join our community to get daily reward's 💰\n🔥 አሁኑኑ ይጀምሩ እና ያሸንፉ! 🚀`;
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: '📢 Join Community', url: 'https://t.me/DM_Bingo' }],
-        [{ text: '🎮 Play Now', url: 'https://t.me/dmbingobot/startapp' }],
-      ],
-    };
-    const photoId = config.startCommandPhotoId.trim();
-    if (!photoId) {
-      await ctx.reply(text, { reply_markup: keyboard });
-      return;
-    }
-    try {
-      await ctx.replyWithPhoto(photoId, {
-        caption: text,
-        reply_markup: keyboard,
-      });
-    } catch (photoErr) {
-      console.error('[bot] /start photo send failed, falling back to text:', photoErr);
-      await ctx.reply(text, { reply_markup: keyboard });
-    }
-  } catch (err) {
-    console.error('[bot] /start reply failed:', err);
-  }
-});
-
-const scheduleBotLaunchRetry = (attempt: number) => {
-  if (botLaunched || botLaunchTimer) {
-    return;
-  }
-  const delay = Math.min(3000 * attempt, 30000);
-  botLaunchTimer = setTimeout(() => {
-    botLaunchTimer = null;
-    void launchBotPolling(attempt + 1);
-  }, delay);
-};
-
-const launchBotPolling = async (attempt = 1): Promise<void> => {
-  if (botLaunched) {
-    return;
-  }
-  try {
-    await bot.launch({ dropPendingUpdates: true });
-    botLaunched = true;
-    console.log('[bot] Telegram bot launched (polling)');
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes('terminated by other getUpdates request')) {
-      console.error('[bot] Polling conflict (409). Another process is using this bot token.');
-    }
-    console.error(`[bot] Failed to launch (attempt ${attempt}):`, err);
-    scheduleBotLaunchRetry(attempt);
-  }
-};
 const httpServer = http.createServer(app);
 
 // ── HTTP server error resilience ──
@@ -231,7 +170,6 @@ process.on('unhandledRejection', (reason) => {
 
 initializeAndRecover()
   .then(async () => {
-    void launchBotPolling();
     await gameServer.listen(PORT);
     console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
     startCleanupCron();
@@ -242,7 +180,6 @@ initializeAndRecover()
   })
   .catch((err) => {
     console.error('[recovery] Unexpected startup failure. Continuing in degraded mode.', err);
-    void launchBotPolling();
     gameServer.listen(PORT).then(() => {
       console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
       startCleanupCron();
