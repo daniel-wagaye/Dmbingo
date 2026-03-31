@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { config } from '../config';
 import { isAllowed } from '../middlewares/rateLimitPerUser';
-import { sql } from '../db/drizzle';
+import { userSql as sql } from '../db/drizzle';
 import { encodeCursor, decodeCursor } from '../utils/encoding';
 
 const VALID_FILTERS = ['all', 'win', 'withdraw', 'transfer', 'coupon'];

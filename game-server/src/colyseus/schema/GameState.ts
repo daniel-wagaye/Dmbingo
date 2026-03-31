@@ -3,12 +3,12 @@ import { Schema, type, MapSchema, ArraySchema } from '@colyseus/schema';
 export class PlayerPick extends Schema {
   @type('number') telegramId: number = 0;
   @type('boolean') winner: boolean = false;
-  @type('boolean') invalid: boolean = false;
   @type('string') winnerName: string = '';
 }
 
 export class GameState extends Schema {
   @type('string') phase: string = 'maintenance';
+  @type('number') gameId: number = 0;
   @type('number') activePlayers: number = 0;
   @type(['number']) shuffledNums = new ArraySchema<number>();
   @type('boolean') callingStarted: boolean = false;

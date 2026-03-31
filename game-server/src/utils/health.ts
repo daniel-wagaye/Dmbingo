@@ -1,4 +1,4 @@
-import { queryWithRetry, sql } from '../db/drizzle';
+import { gameSql } from '../db/drizzle';
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 
@@ -18,7 +18,7 @@ export function getHealth(): { status: HealthStatus; db: HealthStatus; uptime: n
 
 async function checkDb(): Promise<void> {
   try {
-    await queryWithRetry(() => sql`SELECT 1`);
+    await gameSql`SELECT 1`;
     if (dbStatus !== 'healthy') {
       console.log(`[health] DB connection restored after ${consecutiveDbFailures} failures`);
     }

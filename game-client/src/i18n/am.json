@@ -42,6 +42,7 @@
   "server_error": "የአገልጋይ ስህተት — እንደገና ይሞክሩ።",
   "rate_limit_error": "በጣም ብዙ ጥያቄዎች። ቆይተው ይሞክሩ።",
   "game_not_available": "ጨዋታ አይገኝም",
+  "max_2_boards": "አንድ ተጫዋች ከሁለት በላይ ሰሌዳ ቁጥር መምረጥ አይችልም",
   "minimum_players_needed": "ጨዋታው ለመጀመር ተጫዋቾች ቢያንስ {{count}} መሆን አለባቸው!",
   "prize": "ሽልማት",
   "players": "ተጫዋቾች",

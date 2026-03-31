@@ -67,12 +67,9 @@ export async function pickBoard(req: Request, res: Response): Promise<void> {
     // Push to Colyseus room
     if (activeRoom && result.success) {
       if (result.action === 'pick') {
-        activeRoom.updatePick(boardId, telegramId, false, false, '');
+        activeRoom.updatePick(boardId, telegramId, false, '');
       } else if (result.action === 'unpick') {
-        activeRoom.updatePick(boardId, 0, false, false, '');
-      } else if (result.action === 'move') {
-        activeRoom.updatePick(result.to, telegramId, false, false, '');
-        activeRoom.updatePick(result.from, 0, false, false, '');
+        activeRoom.updatePick(boardId, 0, false, '');
       }
     }
 
@@ -87,43 +84,44 @@ export async function pickBoard(req: Request, res: Response): Promise<void> {
 export async function claimBingo(req: Request, res: Response): Promise<void> {
   try {
     const telegramId = req.telegramUser!.telegram_id;
-    const boardId = req.body?.board_id;
+    const boardIds = req.body?.board_ids;
 
-    if (typeof boardId !== 'number') {
-      res.status(400).json({ error: 'INVALID_BOARD', message: 'board_id is required' });
+    // Validate board_ids is an array of numbers, max 2
+    if (!Array.isArray(boardIds) || boardIds.length === 0) {
+      res.status(400).json({ error: 'INVALID_BOARD', message: 'board_ids array is required' });
+      return;
+    }
+    if (boardIds.length > 2) {
+      res.status(400).json({ error: 'TOO_MANY_BOARDS', message: 'Too many board numbers. Only two boards are acceptable.' });
+      return;
+    }
+    if (!boardIds.every((id: any) => typeof id === 'number' && id >= 1 && id <= 500)) {
+      res.status(400).json({ error: 'INVALID_BOARD', message: 'Invalid board number' });
       return;
     }
 
     if (!isAllowed('claim', telegramId, config.claimRateLimitWindowMs, config.claimRateLimitMax)) {
-      res.status(429).json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many Claim. Try again later.' });
+      res.status(429).json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many claims. Try again later.' });
       return;
     }
 
-    const result = await callClaimBingo(boardId, telegramId);
+    const result = await callClaimBingo(boardIds, telegramId);
 
     if (!result) {
       res.status(200).json({ action: 'ignore' });
       return;
     }
 
-    if (result.success === false) {
-      res.status(200).json(result);
-      return;
-    }
-
-    // Push to Colyseus room
-    if (activeRoom) {
-      if (result.action === 'winner') {
-        activeRoom.updatePick(boardId, telegramId, true, false, result.winner_name || '');
-      } else if (result.action === 'invalid') {
-        activeRoom.updatePick(boardId, telegramId, false, true, '');
+    // Push winner boards to Colyseus room
+    if (activeRoom && result.action === 'winner' && result.winner_boards) {
+      for (const wb of result.winner_boards) {
+        activeRoom.updatePick(Number(wb), telegramId, true, result.winner_name || '');
       }
     }
 
-    // Import caller to handle winner flow
-    const { onWinnerDetected } = await import('../jobs/caller');
-
+    // Trigger winner flow
     if (result.action === 'winner') {
+      const { onWinnerDetected } = await import('../jobs/caller');
       onWinnerDetected();
     }
 
@@ -183,6 +181,7 @@ export async function gameControl(req: Request, res: Response): Promise<void> {
     if (activeRoom) {
       activeRoom.setNewGame({
         phase: 'picking',
+        game_id: Number(newGame.game_id),
         picking_ends_at: newGame.picking_ends_at,
         stake_amount: Number(newGame.stake_amount),
         minimum_player: Number(newGame.minimum_player),

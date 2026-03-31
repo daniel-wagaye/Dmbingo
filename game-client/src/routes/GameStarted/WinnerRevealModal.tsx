@@ -11,7 +11,6 @@ interface WinnerEntry {
   boardId: number;
   telegramId: number;
   winner: boolean;
-  invalid: boolean;
   winnerName: string;
 }
 

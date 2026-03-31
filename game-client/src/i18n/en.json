@@ -42,6 +42,7 @@
   "server_error": "Server error — try again.",
   "rate_limit_error": "Too many requests. Try again later.",
   "game_not_available": "Game not available",
+  "max_2_boards": "One player can't pick more than two board numbers",
   "minimum_players_needed": "Players must be at least {{count}} for the game to start!",
   "prize": "Prize",
   "players": "Players",

@@ -22,18 +22,20 @@ export class GameRoom extends Room<{ state: GameState }> {
 
   public setNewGame(gameData: {
     phase: string;
+    game_id?: number;
     picking_ends_at?: string | null;
     stake_amount?: number;
     minimum_player?: number;
   }) {
     this.state.phase = gameData.phase;
+    this.state.gameId = gameData.game_id ?? 0;
     this.state.pickingEndsAt = gameData.picking_ends_at
       ? new Date(gameData.picking_ends_at).getTime()
       : 0;
     this.state.winnerRevealEndsAt = 0;
     this.state.stakeAmount = gameData.stake_amount ?? 0;
     this.state.minimumPlayer = gameData.minimum_player ?? 0;
-    console.log(`[GameRoom] setNewGame: phase=${gameData.phase}, pickingEndsAt=${this.state.pickingEndsAt}, stake=${this.state.stakeAmount}`);
+    console.log(`[GameRoom] setNewGame: phase=${gameData.phase}, gameId=${this.state.gameId}, stake=${this.state.stakeAmount}`);
     this.state.activePlayers = 0;
     this.state.shuffledNums = new ArraySchema<number>();
     this.state.callingStarted = false;
@@ -46,12 +48,10 @@ export class GameRoom extends Room<{ state: GameState }> {
     boardId: number,
     telegramId: number,
     winner: boolean,
-    invalid: boolean,
     winnerName: string
   ) {
     const key = boardId.toString();
     if (telegramId === 0) {
-      // Unpick — remove from map
       this.state.picks.delete(key);
       return;
     }
@@ -62,7 +62,6 @@ export class GameRoom extends Room<{ state: GameState }> {
     }
     pick.telegramId = telegramId;
     pick.winner = winner;
-    pick.invalid = invalid;
     pick.winnerName = winnerName;
   }
 

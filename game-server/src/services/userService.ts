@@ -1,4 +1,4 @@
-import { sql } from '../db/drizzle';
+import { userSql as sql } from '../db/drizzle';
 import type { Sql } from 'postgres';
 
 export interface UserRow {

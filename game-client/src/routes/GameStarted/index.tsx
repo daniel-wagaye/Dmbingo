@@ -42,16 +42,20 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   const [showReveal, setShowReveal] = useState(false);
   const [marksGameId, setMarksGameId] = useState<string>('');
 
-  // Find my pick + board from Colyseus picks map
-  const myPick = useMemo(() => {
-    if (!telegramId) return null;
-    for (const [key, pick] of picks) {
+  // Find ALL my board picks (up to 2) from Colyseus picks map
+  const myPicks = useMemo(() => {
+    if (!telegramId) return [];
+    const result: Array<{ boardId: number } & PlayerPick> = [];
+    picks.forEach((pick, key) => {
       if (Number(pick.telegramId) === Number(telegramId)) {
-        return { boardId: Number(key), ...pick };
+        result.push({ boardId: Number(key), ...pick });
       }
-    }
-    return null;
+    });
+    return result;
   }, [picks, telegramId]);
+
+  const myBoardIds = useMemo(() => myPicks.map(p => p.boardId), [myPicks]);
+  const isWinner = myPicks.some(p => p.winner);
 
   // Collect winners from picks map
   const winners = useMemo(() => {
@@ -113,9 +117,9 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     }
   }, [gameState?.phase]);
 
-  const toggleMark = useCallback((row: number, col: number) => {
+  const toggleMark = useCallback((row: number, col: number, boardId?: number) => {
     if (row === 2 && col === 2) return;
-    const key = `${row}-${col}`;
+    const key = boardId ? `${boardId}-${row}-${col}` : `${row}-${col}`;
     setMarkedCells(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -125,8 +129,8 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   }, []);
 
   const handleClaimBingo = useCallback(async () => {
-    if (!gameState || !myPick || claiming) return;
-    if (myPick.invalid || myPick.winner) return;
+    if (!gameState || myBoardIds.length === 0 || claiming) return;
+    if (isWinner) return;
 
     if (gameState.calledIndex < 2) {
       toast.error(t('please_wait'));
@@ -137,7 +141,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     try {
       await apiClient(`/api/games/0/claim-bingo`, {
         method: 'POST',
-        body: { board_id: myPick.boardId },
+        body: { board_ids: myBoardIds },
       });
     } catch (err: any) {
       if (err.status === 429) {
@@ -146,7 +150,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     } finally {
       setClaiming(false);
     }
-  }, [gameState, myPick, claiming, t]);
+  }, [gameState, myBoardIds, isWinner, claiming, t]);
 
   if (loading || !gameState) {
     return (
@@ -171,8 +175,10 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   const prize = gameState.prizeAmount ? gameState.prizeAmount.toFixed(2) : '0.00';
   const stake = gameState.stakeAmount.toFixed(2);
 
-  const boardId = myPick?.boardId;
-  const card = boardId ? (BINGO_CARDS as Record<string, number[][]>)[String(boardId)] : null;
+  const firstBoardId = myPicks[0]?.boardId;
+  const secondBoardId = myPicks[1]?.boardId;
+  const card1 = firstBoardId ? (BINGO_CARDS as Record<string, number[][]>)[String(firstBoardId)] : null;
+  const card2 = secondBoardId ? (BINGO_CARDS as Record<string, number[][]>)[String(secondBoardId)] : null;
 
   return (
     <div className="game-started-page">
@@ -245,44 +251,72 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
             </div>
           )}
 
-          {card ? (
-            <div className="started-card-box">
-              <div className="started-card-headers">
-                {BINGO_LETTERS.map((h, i) => (
-                  <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
-                ))}
-              </div>
-              {card.map((row, ri) => (
-                <div key={ri} className="started-card-row">
-                  {row.map((cell, ci) => {
-                    const isFree = ri === 2 && ci === 2;
-                    const isMarked = isFree || markedCells.has(`${ri}-${ci}`);
-                    let cls = 'started-card-cell';
-                    if (isFree) cls += ' sc-free';
-                    else if (isMarked) cls += ' sc-marked';
-                    return (
-                      <button key={ci} className={cls} onClick={() => toggleMark(ri, ci)}>
-                        {isFree ? t('free') : cell}
-                      </button>
-                    );
-                  })}
+          {/* Bingo cards — 1 or 2 stacked vertically */}
+          {card1 ? (
+            <>
+              <div className="started-card-box">
+                <div className="started-card-headers">
+                  {BINGO_LETTERS.map((h, i) => (
+                    <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
+                  ))}
                 </div>
-              ))}
-              <span className="started-board-label">{t('board_number', { id: boardId })}</span>
-            </div>
+                {card1.map((row: number[], ri: number) => (
+                  <div key={ri} className="started-card-row">
+                    {row.map((cell: number, ci: number) => {
+                      const isFree = ri === 2 && ci === 2;
+                      const isMarked = isFree || markedCells.has(`${firstBoardId}-${ri}-${ci}`);
+                      let cls = 'started-card-cell';
+                      if (isFree) cls += ' sc-free';
+                      else if (isMarked) cls += ' sc-marked';
+                      return (
+                        <button key={ci} className={cls} onClick={() => toggleMark(ri, ci, firstBoardId)}>
+                          {isFree ? t('free') : cell}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+                <span className="started-board-label">{t('board_number', { id: firstBoardId })}</span>
+              </div>
+
+              {card2 && (
+                <div className="started-card-box">
+                  <div className="started-card-headers">
+                    {BINGO_LETTERS.map((h, i) => (
+                      <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
+                    ))}
+                  </div>
+                  {card2.map((row: number[], ri: number) => (
+                    <div key={ri} className="started-card-row">
+                      {row.map((cell: number, ci: number) => {
+                        const isFree = ri === 2 && ci === 2;
+                        const isMarked = isFree || markedCells.has(`${secondBoardId}-${ri}-${ci}`);
+                        let cls = 'started-card-cell';
+                        if (isFree) cls += ' sc-free';
+                        else if (isMarked) cls += ' sc-marked';
+                        return (
+                          <button key={ci} className={cls} onClick={() => toggleMark(ri, ci, secondBoardId)}>
+                            {isFree ? t('free') : cell}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                  <span className="started-board-label">{t('board_number', { id: secondBoardId })}</span>
+                </div>
+              )}
+            </>
           ) : (
             <div className="no-card-msg">{t('no_card_message')}</div>
           )}
 
-          {myPick && !myPick.invalid && !myPick.winner && (
+          {/* Bingo button */}
+          {myBoardIds.length > 0 && !isWinner && (
             <button className="bingo-btn" onClick={handleClaimBingo} disabled={claiming}>
               {claiming ? <span className="spinner-sm" /> : t('bingo')}
             </button>
           )}
-          {myPick?.invalid && (
-            <button className="bingo-btn bingo-disabled" disabled>{t('disqualified')}</button>
-          )}
-          {myPick?.winner && (
+          {isWinner && (
             <button className="bingo-btn bingo-winner" disabled>{t('winner')}</button>
           )}
         </div>

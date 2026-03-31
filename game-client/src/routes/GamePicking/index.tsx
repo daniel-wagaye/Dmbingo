@@ -97,13 +97,14 @@ export default function GamePicking({ telegramId, timeSync, user, onRefreshUser 
     }
   }, [gameState?.phase, navigate]);
 
-  // Find my pick from Colyseus picks map
-  const myBoardId = useMemo(() => {
-    if (!telegramId) return null;
+  // Find all my board picks (up to 2) from Colyseus picks map
+  const myBoardIds = useMemo(() => {
+    if (!telegramId) return [];
+    const ids: number[] = [];
     for (const [key, pick] of picks) {
-      if (Number(pick.telegramId) === Number(telegramId)) return Number(key);
+      if (Number(pick.telegramId) === Number(telegramId)) ids.push(Number(key));
     }
-    return null;
+    return ids;
   }, [picks, telegramId]);
 
   const handleTileClick = useCallback(
@@ -142,7 +143,12 @@ export default function GamePicking({ telegramId, timeSync, user, onRefreshUser 
             toast.error(t('picking_closed'));
           }
         } else if (err.status === 402) {
-          toast.error(t('insufficient_funds'));
+          const code = err.data?.error;
+          if (code === 'ALREADY_PICKED_2_BOARD_NUMBER') {
+            toast.error(t('max_2_boards'));
+          } else {
+            toast.error(t('insufficient_funds'));
+          }
         } else if (err.status !== 204) {
           toast.error(t('server_error'));
         }
@@ -183,8 +189,8 @@ export default function GamePicking({ telegramId, timeSync, user, onRefreshUser 
         />
       </div>
 
-      {/* Footer bingo preview */}
-      {myBoardId && <FooterPreview boardId={myBoardId} />}
+      {/* Footer bingo preview (1 or 2 cards side-by-side) */}
+      {myBoardIds.length > 0 && <FooterPreview boardIds={myBoardIds} />}
     </div>
   );
 }

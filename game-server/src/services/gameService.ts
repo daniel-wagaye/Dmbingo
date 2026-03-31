@@ -1,52 +1,49 @@
-import { queryWithRetry, sql } from '../db/drizzle';
+import { gameSql, callerSql } from '../db/drizzle';
+
+// ── Game pool operations (picks, claims, transitions) ──
 
 export async function callPickBoard(telegramId: number, boardId: number): Promise<any> {
-  const rows = await queryWithRetry(() =>
-    sql`SELECT pick_board(${telegramId}::bigint, ${boardId}::smallint) AS result`
-  );
+  const rows = await gameSql`SELECT pick_board(${telegramId}::bigint, ${boardId}::smallint) AS result`;
   return rows[0]?.result;
 }
 
 export async function callTransitionPicking(): Promise<any> {
-  const rows = await queryWithRetry(() => sql`SELECT transition_picking() AS result`);
+  const rows = await gameSql`SELECT transition_picking() AS result`;
   return rows[0]?.result;
 }
 
-export async function callClaimBingo(boardId: number, telegramId: number): Promise<any> {
-  const rows = await queryWithRetry(() =>
-    sql`SELECT claim_bingo(${boardId}::smallint, ${telegramId}::bigint) AS result`
-  );
+export async function callClaimBingo(boardIds: number[], telegramId: number): Promise<any> {
+  const rows = await gameSql`SELECT claim_bingo(${boardIds}::smallint[], ${telegramId}::bigint) AS result`;
   return (rows[0] as any)?.result;
 }
 
 export async function callFinalizeGame(): Promise<any> {
-  const rows = await queryWithRetry(() => sql`SELECT finalize_game() AS result`);
+  const rows = await gameSql`SELECT finalize_game() AS result`;
   return rows[0]?.result;
 }
 
 export async function callCreateNextGame(): Promise<any> {
-  const rows = await queryWithRetry(() => sql`SELECT create_next_game() AS result`);
+  const rows = await gameSql`SELECT create_next_game() AS result`;
   return rows[0]?.result ?? null;
 }
 
 export async function callRecoverGameState(): Promise<any> {
-  const rows = await queryWithRetry(() => sql`SELECT recover_game_state() AS result`);
+  const rows = await gameSql`SELECT recover_game_state() AS result`;
   return rows[0]?.result;
 }
 
 export async function getLatestGame(): Promise<any | null> {
-  const rows = await queryWithRetry(() => sql`SELECT * FROM games ORDER BY game_id DESC LIMIT 1`);
+  const rows = await gameSql`SELECT * FROM games ORDER BY game_id DESC LIMIT 1`;
   return rows[0] ?? null;
 }
 
 export async function getGameStatus(): Promise<string | null> {
-  const rows = await queryWithRetry(() => sql`SELECT status FROM game_status WHERE id = 1`);
+  const rows = await gameSql`SELECT status FROM game_status WHERE id = 1`;
   return rows[0]?.status ?? null;
 }
 
 export async function createNewPickingGame(): Promise<any> {
-  return await queryWithRetry(() => sql.begin(async (tx: any) => {
-    // 1. Lock latest game
+  return await gameSql.begin(async (tx: any) => {
     const lastGameRows = await tx`
       SELECT phase FROM games ORDER BY game_id DESC LIMIT 1 FOR UPDATE
     `;
@@ -54,7 +51,6 @@ export async function createNewPickingGame(): Promise<any> {
       throw new Error('ALREADY_STARTED');
     }
 
-    // 2. Lock game_status
     const statusRows = await tx`
       SELECT status FROM game_status WHERE id = 1 FOR UPDATE
     `;
@@ -62,7 +58,6 @@ export async function createNewPickingGame(): Promise<any> {
       throw new Error('GAME_STATUS_IS_NOT_ACTIVE');
     }
 
-    // 3. Read game_config
     const configRows = await tx`
       SELECT stake_amount, picking_countdown_end_time, minimum_player
       FROM game_config WHERE id = 1
@@ -70,7 +65,6 @@ export async function createNewPickingGame(): Promise<any> {
     if (!configRows.length) throw new Error('CONFIG_MISSING');
     const cfg = configRows[0];
 
-    // 4. Insert new game
     const inserted = await tx`
       INSERT INTO games (
         phase, calling_started, called_index, active_players,
@@ -84,13 +78,15 @@ export async function createNewPickingGame(): Promise<any> {
       ) RETURNING *
     `;
     return inserted[0];
-  }));
+  });
 }
 
+// ── Dedicated caller connection (1 permanent connection) ──
+
 export async function updateCalledIndex(gameId: number, newIndex: number): Promise<void> {
-  await queryWithRetry(() => sql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`);
+  await callerSql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`;
 }
 
 export async function setCallingStarted(gameId: number): Promise<void> {
-  await queryWithRetry(() => sql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`);
+  await callerSql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`;
 }

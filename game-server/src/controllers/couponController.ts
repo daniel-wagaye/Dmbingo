@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { config } from '../config';
 import { isAllowed } from '../middlewares/rateLimitPerUser';
-import { sql } from '../db/drizzle';
+import { couponSql as sql } from '../db/drizzle';
 
 const ERROR_MAP: Record<string, { status: number; message: string }> = {
   INVALID_COUPON:        { status: 400, message: 'Invalid coupon' },

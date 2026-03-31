@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import { isAllowed } from '../middlewares/rateLimitPerUser';
-import { sql } from '../db/drizzle';
+import { userSql as sql } from '../db/drizzle';
 
 const bot = new Telegraf(config.botToken);
 const PHONE_RE = /^(09|07)\d{8}$/;

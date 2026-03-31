@@ -167,6 +167,7 @@ async function initializeAndRecover(): Promise<void> {
         const phase = result?.new_game_phase || result?.phase || 'maintenance';
         activeRoom.setNewGame({
           phase,
+          game_id: result?.new_game_id ? Number(result.new_game_id) : 0,
           picking_ends_at: result?.picking_ends_at ?? null,
           stake_amount: result?.stake_amount ? Number(result.stake_amount) : 0,
           minimum_player: result?.minimum_player ? Number(result.minimum_player) : 0,

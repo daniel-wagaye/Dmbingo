@@ -79,6 +79,7 @@ function scheduleRevealEnd(): void {
         if (activeRoom) {
           activeRoom.setNewGame({
             phase: nextGame.phase || 'maintenance',
+            game_id: nextGame.game_id ? Number(nextGame.game_id) : 0,
             picking_ends_at: nextGame.picking_ends_at || null,
             stake_amount: nextGame.stake_amount ? Number(nextGame.stake_amount) : 0,
           });

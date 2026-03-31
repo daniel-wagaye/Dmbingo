@@ -4,12 +4,12 @@ import { joinGameRoom, leaveGameRoom } from '../services/colyseusClient';
 export interface PlayerPick {
   telegramId: number;
   winner: boolean;
-  invalid: boolean;
   winnerName: string;
 }
 
 export interface GameRoomState {
   phase: string;
+  gameId: number;
   activePlayers: number;
   shuffledNums: number[];
   callingStarted: boolean;
@@ -101,6 +101,7 @@ export function useGameRoom(): UseGameRoomReturn {
 function extractState(s: any): GameRoomState {
   return {
     phase: s.phase ?? 'maintenance',
+    gameId: s.gameId ?? 0,
     activePlayers: s.activePlayers ?? 0,
     shuffledNums: s.shuffledNums ? Array.from(s.shuffledNums) : [],
     callingStarted: !!s.callingStarted,
@@ -122,7 +123,6 @@ function extractPicks(picksMap: any): Map<string, PlayerPick> {
       result.set(key, {
         telegramId: pick.telegramId ?? 0,
         winner: !!pick.winner,
-        invalid: !!pick.invalid,
         winnerName: pick.winnerName ?? '',
       });
     });
