@@ -41,9 +41,9 @@ export default function FooterPreview({ boardIds }: FooterPreviewProps) {
 
   return (
     <div className="footer-preview">
-      <div className={`footer-cards-row${compact ? ' footer-cards-dual' : ''}`}>
-        {boardIds.map(id => (
-          <MiniCard key={id} boardId={id} compact={compact} />
+      <div className={`footer-cards-row ${boardIds.length === 1 ? 'single' : 'dual'}`}>
+        {boardIds.map((id) => (
+          <MiniCard key={id} boardId={id} compact={boardIds.length > 1} />
         ))}
       </div>
     </div>

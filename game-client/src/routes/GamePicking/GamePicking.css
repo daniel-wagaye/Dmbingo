@@ -180,7 +180,7 @@
 }
 
 .bingo-header {
-  font-size: px;
+  font-size: 12px;
   font-weight: 700;
   padding: 4px 0;
 }
@@ -214,4 +214,34 @@
   font-size: 12px;
   color: var(--color-text-muted);
   font-weight: 500;
+  text-align: center;
+}
+
+/* cards container */
+.footer-cards-row {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* two cards side by side */
+.footer-cards-row.dual {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* one card centered and slightly larger */
+.footer-cards-row.single {
+  justify-content: center;
+}
+
+.footer-cards-row.single .bingo-card-mini {
+  max-width: 280px;
+  transform: scale(1.05);
+}
+
+.footer-cards-row.dual .bingo-card-mini {
+  max-width: 100%;
 }

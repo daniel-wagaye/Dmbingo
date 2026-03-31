@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { TimeSync } from '../../hooks/useAuth';
 import { useGameRoom, PlayerPick } from '../../hooks/useGameRoom';
-import { apiClient } from '../../services/apiClient';
+import { hasBingoPattern } from '../../utils/bingoPatterns';
 import BINGO_CARDS from '../../data/bingoCards.json';
 import WinnerRevealModal from './WinnerRevealModal';
 import './GameStarted.css';
@@ -16,6 +16,10 @@ interface GameStartedProps {
 
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
+const MANUAL_TIMEOUT_MS = 500;
+const AUTO_TIMEOUT_MS = 600;
+const AUTO_RETRY_DELAY_MS = 100;
+const NO_BINGO_SUPPRESS_MS = 500;
 
 function getLetterForNumber(n: number): string {
   if (n >= 1 && n <= 15) return 'B';
@@ -33,16 +37,53 @@ function getColumnIndex(n: number): number {
   return 4;
 }
 
+// ── Per-board localStorage marks with gameId ──
+interface DabStorage {
+  gameId: number;
+  boards: Record<string, { marked: number[] }>;
+}
+
+function loadDabStorage(gameId: number): DabStorage {
+  try {
+    const raw = localStorage.getItem('bingoDabs');
+    if (raw) {
+      const stored: DabStorage = JSON.parse(raw);
+      if (stored.gameId === gameId) return stored;
+    }
+  } catch { /* ignore */ }
+  return { gameId, boards: {} };
+}
+
+function saveDabStorage(storage: DabStorage): void {
+  localStorage.setItem('bingoDabs', JSON.stringify(storage));
+}
+
+function getMarkedNums(storage: DabStorage, boardId: number): Set<number> {
+  return new Set(storage.boards[String(boardId)]?.marked ?? []);
+}
+
+function setMarkedNums(storage: DabStorage, boardId: number, nums: Set<number>): DabStorage {
+  return {
+    ...storage,
+    boards: { ...storage.boards, [String(boardId)]: { marked: [...nums] } },
+  };
+}
+
 export default function GameStarted({ telegramId, timeSync }: GameStartedProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { gameState, picks, loading } = useGameRoom();
-  const [markedCells, setMarkedCells] = useState<Set<string>>(new Set());
   const [claiming, setClaiming] = useState(false);
   const [showReveal, setShowReveal] = useState(false);
-  const [marksGameId, setMarksGameId] = useState<string>('');
+  const [autoMode, setAutoMode] = useState(() => {
+    try { return localStorage.getItem('bingoAutoMode') !== 'off'; } catch { return true; }
+  });
+  const [dabStorage, setDabStorage] = useState<DabStorage>({ gameId: 0, boards: {} });
+  const claimingRef = useRef(false);
+  const autoClaimSuppressedForIndex = useRef(-1);
+  const prevCalledIndexRef = useRef(0);
 
-  // Find ALL my board picks (up to 2) from Colyseus picks map
+  // Find ALL my board picks (up to 2)
   const myPicks = useMemo(() => {
     if (!telegramId) return [];
     const result: Array<{ boardId: number } & PlayerPick> = [];
@@ -57,7 +98,6 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   const myBoardIds = useMemo(() => myPicks.map(p => p.boardId), [myPicks]);
   const isWinner = myPicks.some(p => p.winner);
 
-  // Collect winners from picks map
   const winners = useMemo(() => {
     const result: Array<{ boardId: number } & PlayerPick> = [];
     picks.forEach((pick, key) => {
@@ -66,91 +106,206 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     return result;
   }, [picks]);
 
-  // Load marks — use phase as proxy for "game identity" since Colyseus doesn't expose game_id
+  // Load dab storage when gameId changes
   useEffect(() => {
-    const phaseKey = gameState?.phase || '';
-    if (phaseKey === marksGameId) return;
-    setMarksGameId(phaseKey);
-    try {
-      const raw = localStorage.getItem('bingoMarks');
-      if (raw) {
-        const stored = JSON.parse(raw);
-        // Keep marks if same phase (started), clear on phase change
-        if (stored.phase === 'started' && phaseKey === 'started') {
-          setMarkedCells(new Set(stored.marks || []));
-        } else {
-          localStorage.removeItem('bingoMarks');
-          setMarkedCells(new Set());
-        }
-      }
-    } catch {
-      localStorage.removeItem('bingoMarks');
-      setMarkedCells(new Set());
+    const gid = gameState?.gameId ?? 0;
+    if (gid > 0) {
+      setDabStorage(loadDabStorage(gid));
     }
-  }, [gameState?.phase]);
+  }, [gameState?.gameId]);
 
-  // Persist marks
+  // Persist auto mode to localStorage
   useEffect(() => {
-    if (!gameState || gameState.phase !== 'started') return;
-    localStorage.setItem('bingoMarks', JSON.stringify({
-      phase: 'started',
-      marks: [...markedCells],
-    }));
-  }, [markedCells, gameState?.phase]);
+    localStorage.setItem('bingoAutoMode', autoMode ? 'on' : 'off');
+  }, [autoMode]);
 
   // Phase navigation
   useEffect(() => {
     if (!gameState || loading) return;
-    if (gameState.phase === 'picking') {
-      navigate('/game_picking', { replace: true });
-    } else if (gameState.phase === 'maintenance') {
-      navigate('/maintenance', { replace: true });
-    } else if (gameState.phase === 'winner_reveal') {
-      setShowReveal(true);
-    }
+    if (gameState.phase === 'picking') navigate('/game_picking', { replace: true });
+    else if (gameState.phase === 'maintenance') navigate('/maintenance', { replace: true });
+    else if (gameState.phase === 'winner_reveal') setShowReveal(true);
   }, [gameState?.phase, loading, navigate]);
 
   useEffect(() => {
     if (!gameState) return;
-    if (gameState.phase !== 'winner_reveal' && gameState.phase !== 'started') {
-      setShowReveal(false);
-    }
+    if (gameState.phase !== 'winner_reveal' && gameState.phase !== 'started') setShowReveal(false);
   }, [gameState?.phase]);
 
-  const toggleMark = useCallback((row: number, col: number, boardId?: number) => {
-    if (row === 2 && col === 2) return;
-    const key = boardId ? `${boardId}-${row}-${col}` : `${row}-${col}`;
-    setMarkedCells(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+  // ── Auto-dab + auto-claim on new called number ──
+  useEffect(() => {
+    if (!gameState || !gameState.callingStarted || isWinner) return;
+    const ci = gameState.calledIndex;
+    if (ci <= prevCalledIndexRef.current) return;
+    prevCalledIndexRef.current = ci;
+
+    if (myBoardIds.length === 0) return;
+    const shuffled = gameState.shuffledNums || [];
+    const calledNums = new Set(shuffled.slice(0, ci));
+
+    let updated = dabStorage;
+    const cards = BINGO_CARDS as Record<string, number[][]>;
+
+    for (const bid of myBoardIds) {
+      const card = cards[String(bid)];
+      if (!card) continue;
+
+      if (autoMode) {
+        // Auto-dab: mark only called numbers, remove uncalled manual dabs
+        const autoMarked = new Set<number>();
+        for (const row of card) {
+          for (const cell of row) {
+            if (calledNums.has(cell)) autoMarked.add(cell);
+          }
+        }
+        updated = setMarkedNums(updated, bid, autoMarked);
+      }
+    }
+
+    if (autoMode) {
+      setDabStorage(updated);
+      saveDabStorage(updated);
+    }
+
+    // Auto-claim: check pattern for any board
+    if (autoMode && !claimingRef.current && autoClaimSuppressedForIndex.current < ci) {
+      let hasPattern = false;
+      for (const bid of myBoardIds) {
+        const card = cards[String(bid)];
+        if (!card) continue;
+        const marked = getMarkedNums(updated, bid);
+        if (hasBingoPattern(card, marked)) { hasPattern = true; break; }
+      }
+      if (hasPattern) {
+        doClaimBingo(true);
+      }
+    }
+  }, [gameState?.calledIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toggle auto mode: when turning ON, sync dabs to only called numbers
+  const handleToggleAuto = useCallback(() => {
+    setAutoMode(prev => {
+      const next = !prev;
+      if (next && gameState) {
+        // Re-sync: only keep called number dabs
+        const shuffled = gameState.shuffledNums || [];
+        const calledNums = new Set(shuffled.slice(0, gameState.calledIndex));
+        const cards = BINGO_CARDS as Record<string, number[][]>;
+        let updated = dabStorage;
+        for (const bid of myBoardIds) {
+          const card = cards[String(bid)];
+          if (!card) continue;
+          const autoMarked = new Set<number>();
+          for (const row of card) {
+            for (const cell of row) {
+              if (calledNums.has(cell)) autoMarked.add(cell);
+            }
+          }
+          updated = setMarkedNums(updated, bid, autoMarked);
+        }
+        setDabStorage(updated);
+        saveDabStorage(updated);
+      }
       return next;
     });
-  }, []);
+  }, [gameState, dabStorage, myBoardIds]);
 
-  const handleClaimBingo = useCallback(async () => {
-    if (!gameState || myBoardIds.length === 0 || claiming) return;
-    if (isWinner) return;
+  // Manual dab toggle (only when auto is OFF)
+  const toggleMark = useCallback((boardId: number, num: number) => {
+    if (autoMode) return;
+    setDabStorage(prev => {
+      const current = getMarkedNums(prev, boardId);
+      if (current.has(num)) current.delete(num);
+      else current.add(num);
+      const next = setMarkedNums(prev, boardId, current);
+      saveDabStorage(next);
+      return next;
+    });
+  }, [autoMode]);
 
+  // ── Bingo claim with timeout ──
+  const doClaimBingo = useCallback(async (isAuto: boolean) => {
+    if (!gameState || myBoardIds.length === 0 || claimingRef.current || isWinner) return;
     if (gameState.calledIndex < 2) {
-      toast.error(t('please_wait'));
+      if (!isAuto) toast.error(t('please_wait'));
       return;
     }
 
+    claimingRef.current = true;
     setClaiming(true);
+
+    const timeoutMs = isAuto ? AUTO_TIMEOUT_MS : MANUAL_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      await apiClient(`/api/games/0/claim-bingo`, {
-        method: 'POST',
-        body: { board_ids: myBoardIds },
-      });
-    } catch (err: any) {
-      if (err.status === 429) {
+      const res = await fetch(
+        `${(import.meta as any).env.VITE_API_URL || 'http://localhost:3000'}/api/games/0/claim-bingo`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || '',
+          },
+          body: JSON.stringify({ board_ids: myBoardIds }),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timer);
+
+      if (res.status === 204) {
+        // empty response
+      } else if (res.ok) {
+        const data = await res.json();
+        if (data.action === 'no_bingo') {
+          if (isAuto) {
+            autoClaimSuppressedForIndex.current = gameState.calledIndex;
+            toast.error(t('no_bingo'));
+          } else {
+            toast.error(t('no_bingo'));
+            await new Promise(r => setTimeout(r, NO_BINGO_SUPPRESS_MS));
+          }
+        }
+        // winner result handled by Colyseus state change
+      } else if (res.status === 429) {
         toast.error(t('claim_rate_limit'));
       }
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        if (isAuto) {
+          toast.error(t('bingo_timeout_auto'));
+          setTimeout(() => {
+            claimingRef.current = false;
+            setClaiming(false);
+            doClaimBingo(true);
+          }, AUTO_RETRY_DELAY_MS);
+          return;
+        } else {
+          toast.error(t('bingo_timeout'));
+        }
+      } else if (!navigator.onLine) {
+        if (isAuto) {
+          toast.error(t('no_internet_auto'));
+          setTimeout(() => {
+            claimingRef.current = false;
+            setClaiming(false);
+            doClaimBingo(true);
+          }, AUTO_RETRY_DELAY_MS);
+          return;
+        } else {
+          toast.error(t('no_internet'));
+        }
+      }
     } finally {
+      claimingRef.current = false;
       setClaiming(false);
     }
-  }, [gameState, myBoardIds, isWinner, claiming, t]);
+  }, [gameState, myBoardIds, isWinner, t]);
+
+  const handleClaimBingo = useCallback(() => {
+    doClaimBingo(false);
+  }, [doClaimBingo]);
 
   if (loading || !gameState) {
     return (
@@ -177,8 +332,44 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
 
   const firstBoardId = myPicks[0]?.boardId;
   const secondBoardId = myPicks[1]?.boardId;
-  const card1 = firstBoardId ? (BINGO_CARDS as Record<string, number[][]>)[String(firstBoardId)] : null;
-  const card2 = secondBoardId ? (BINGO_CARDS as Record<string, number[][]>)[String(secondBoardId)] : null;
+  const cards = BINGO_CARDS as Record<string, number[][]>;
+  const card1 = firstBoardId ? cards[String(firstBoardId)] : null;
+  const card2 = secondBoardId ? cards[String(secondBoardId)] : null;
+
+  const renderCard = (card: number[][], boardId: number) => {
+    const boardMarks = getMarkedNums(dabStorage, boardId);
+    return (
+      <div className="started-card-box" key={boardId}>
+        <div className="started-card-headers">
+          {BINGO_LETTERS.map((h, i) => (
+            <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
+          ))}
+        </div>
+        {card.map((row: number[], ri: number) => (
+          <div key={ri} className="started-card-row">
+            {row.map((cell: number, ci: number) => {
+              const isFree = ri === 2 && ci === 2;
+              const isMarked = isFree || boardMarks.has(cell);
+              let cls = 'started-card-cell';
+              if (isFree) cls += ' sc-free';
+              else if (isMarked) cls += ' sc-marked';
+              return (
+                <button
+                  key={ci}
+                  className={cls}
+                  onClick={() => !isFree && toggleMark(boardId, cell)}
+                  disabled={autoMode && !isFree}
+                >
+                  {isFree ? t('free') : cell}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <span className="started-board-label">{t('board_number', { id: boardId })}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="game-started-page">
@@ -251,60 +442,26 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
             </div>
           )}
 
-          {/* Bingo cards — 1 or 2 stacked vertically */}
+          {/* Automatic toggle */}
+          {myBoardIds.length > 0 && (
+            <div className="auto-toggle-row">
+              <span className="auto-toggle-label">{t('automatic')}</span>
+              <button
+                type="button"
+                className={`auto-toggle-btn ${autoMode ? 'auto-on' : 'auto-off'}`}
+                onClick={handleToggleAuto}
+              >
+                <span className="auto-toggle-thumb" />
+                <span className="auto-toggle-text">{autoMode ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Bingo cards */}
           {card1 ? (
             <>
-              <div className="started-card-box">
-                <div className="started-card-headers">
-                  {BINGO_LETTERS.map((h, i) => (
-                    <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
-                  ))}
-                </div>
-                {card1.map((row: number[], ri: number) => (
-                  <div key={ri} className="started-card-row">
-                    {row.map((cell: number, ci: number) => {
-                      const isFree = ri === 2 && ci === 2;
-                      const isMarked = isFree || markedCells.has(`${firstBoardId}-${ri}-${ci}`);
-                      let cls = 'started-card-cell';
-                      if (isFree) cls += ' sc-free';
-                      else if (isMarked) cls += ' sc-marked';
-                      return (
-                        <button key={ci} className={cls} onClick={() => toggleMark(ri, ci, firstBoardId)}>
-                          {isFree ? t('free') : cell}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-                <span className="started-board-label">{t('board_number', { id: firstBoardId })}</span>
-              </div>
-
-              {card2 && (
-                <div className="started-card-box">
-                  <div className="started-card-headers">
-                    {BINGO_LETTERS.map((h, i) => (
-                      <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
-                    ))}
-                  </div>
-                  {card2.map((row: number[], ri: number) => (
-                    <div key={ri} className="started-card-row">
-                      {row.map((cell: number, ci: number) => {
-                        const isFree = ri === 2 && ci === 2;
-                        const isMarked = isFree || markedCells.has(`${secondBoardId}-${ri}-${ci}`);
-                        let cls = 'started-card-cell';
-                        if (isFree) cls += ' sc-free';
-                        else if (isMarked) cls += ' sc-marked';
-                        return (
-                          <button key={ci} className={cls} onClick={() => toggleMark(ri, ci, secondBoardId)}>
-                            {isFree ? t('free') : cell}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
-                  <span className="started-board-label">{t('board_number', { id: secondBoardId })}</span>
-                </div>
-              )}
+              {renderCard(card1, firstBoardId!)}
+              {card2 && renderCard(card2, secondBoardId!)}
             </>
           ) : (
             <div className="no-card-msg">{t('no_card_message')}</div>
@@ -312,8 +469,12 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
 
           {/* Bingo button */}
           {myBoardIds.length > 0 && !isWinner && (
-            <button className="bingo-btn" onClick={handleClaimBingo} disabled={claiming}>
-              {claiming ? <span className="spinner-sm" /> : t('bingo')}
+            <button
+              className="bingo-btn"
+              onClick={handleClaimBingo}
+              disabled={claiming || autoMode}
+            >
+              {claiming ? <span className="spinner-sm" /> : (autoMode ? t('automatic') : t('bingo'))}
             </button>
           )}
           {isWinner && (

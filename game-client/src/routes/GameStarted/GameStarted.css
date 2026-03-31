@@ -462,6 +462,76 @@
   margin-top: 4px;
 }
 
+/* ===== Automatic Toggle ===== */
+.auto-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(35, 42, 59, 0.6);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.auto-toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.auto-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 60px;
+  height: 28px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+  padding: 0 4px;
+}
+
+.auto-on {
+  background: #ff8c00;
+}
+
+.auto-off {
+  background: #4b5563;
+}
+
+.auto-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.2s;
+}
+
+.auto-on .auto-toggle-thumb {
+  left: 34px;
+}
+
+.auto-off .auto-toggle-thumb {
+  left: 4px;
+}
+
+.auto-toggle-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  position: absolute;
+  right: 8px;
+}
+
+.auto-on .auto-toggle-text {
+  right: auto;
+  left: 8px;
+}
+
 /* Countdown bar */
 .reveal-countdown-bar {
   text-align: center;
