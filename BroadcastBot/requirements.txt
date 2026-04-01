@@ -4,3 +4,4 @@ aiofiles
 motor
 dnspython
 python-dotenv
+certifi

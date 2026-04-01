@@ -1,13 +1,12 @@
 # (c) N A C BOTS
 
 import datetime
-
 import motor.motor_asyncio
-
+import certifi
 
 class Database:
     def __init__(self, uri, database_name):
-        self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
+        self._client = motor.motor_asyncio.AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
         self.db = self._client[database_name]
         self.col = self.db.users
 
