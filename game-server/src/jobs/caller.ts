@@ -7,7 +7,6 @@ import {
 } from '../services/gameService';
 import { schedulePickingTimer } from './scheduler';
 import { activeRoom } from '../colyseus/GameRoom';
-import { withRetry } from '../utils/retry';
 
 let callingInterval: ReturnType<typeof setInterval> | null = null;
 let activeGameId: number | null = null;
@@ -50,7 +49,8 @@ export function onWinnerDetected(): void {
 async function runFinalization(): Promise<void> {
   try {
     console.log(`[caller] Finalizing game ${activeGameId}...`);
-    const result = await withRetry(() => callFinalizeGame(), 'finalize_game');
+    // callFinalizeGame has 30-retry inside gameService
+    const result = await callFinalizeGame();
     console.log('[caller] finalize_game result:', result);
 
     stopCallingLoop();
@@ -62,7 +62,7 @@ async function runFinalization(): Promise<void> {
 
     scheduleRevealEnd();
   } catch (err) {
-    console.error('[caller] All retries failed for finalize_game:', err);
+    console.error('[caller] finalize_game failed after all retries:', err);
     stopCallingLoop();
   }
 }
@@ -72,7 +72,8 @@ function scheduleRevealEnd(): void {
 
   setTimeout(async () => {
     try {
-      const nextGame = await withRetry(() => callCreateNextGame(), 'create_next_game');
+      // callCreateNextGame has 30-retry inside gameService
+      const nextGame = await callCreateNextGame();
       console.log('[caller] create_next_game returned:', nextGame);
 
       if (nextGame) {
@@ -91,7 +92,7 @@ function scheduleRevealEnd(): void {
         }
       }
     } catch (err) {
-      console.error('[caller] All retries failed for create_next_game:', err);
+      console.error('[caller] create_next_game failed after all retries:', err);
     }
   }, config.winnerRevealDurationMs);
 }
@@ -110,7 +111,8 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
     if (activeGameId !== gameId) return;
 
     try {
-      await withRetry(() => setCallingStarted(gameId), 'set_calling_started');
+      // setCallingStarted has 30-retry inside gameService
+      await setCallingStarted(gameId);
       console.log(`[caller] Game ${gameId}: calling_started = true`);
 
       if (activeRoom) {
@@ -138,17 +140,17 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
         }
 
         try {
-          await withRetry(() => updateCalledIndex(gameId, currentIndex), 'update_called_index');
-          // Only push to Colyseus after DB write succeeds
+          // updateCalledIndex has 30-retry inside gameService
+          await updateCalledIndex(gameId, currentIndex);
           if (activeRoom) {
             activeRoom.setCalledIndex(currentIndex);
           }
         } catch (err) {
-          console.error(`[caller] Failed to persist called_index ${currentIndex} after retries:`, err);
+          console.error(`[caller] Failed to persist called_index ${currentIndex} after all retries:`, err);
         }
       }, config.callingIntervalMs);
     } catch (err) {
-      console.error('[caller] All retries failed for set_calling_started:', err);
+      console.error('[caller] set_calling_started failed after all retries:', err);
       stopCallingLoop();
     }
   }, config.callingStartDelayMs);

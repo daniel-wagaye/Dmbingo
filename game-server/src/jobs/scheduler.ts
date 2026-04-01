@@ -1,7 +1,6 @@
 import { callTransitionPicking } from '../services/gameService';
 import { startCallingLoop } from './caller';
 import { activeRoom } from '../colyseus/GameRoom';
-import { withRetry } from '../utils/retry';
 
 let pickingTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -19,12 +18,12 @@ export function schedulePickingTimer(delayMs: number): void {
   pickingTimer = setTimeout(async () => {
     pickingTimer = null;
     try {
-      const result = await withRetry(() => callTransitionPicking(), 'transition_picking');
+      // callTransitionPicking already has 30-retry logic inside gameService
+      const result = await callTransitionPicking();
       console.log('[scheduler] transition_picking result:', result);
 
       if (!result || !result.success) {
         console.error('[scheduler] transition_picking failed:', result);
-        // Reschedule after 30s to avoid stuck state
         schedulePickingTimer(30000);
         return;
       }
@@ -53,12 +52,11 @@ export function schedulePickingTimer(delayMs: number): void {
         startCallingLoop(result.game_id, result.shuffled_nums);
       }
     } catch (err: any) {
-      // If the game is no longer in picking phase, don't reschedule — it already transitioned
       if (err?.code === 'P0001' && err?.hint?.includes('picking phase')) {
         console.log('[scheduler] Game already left picking phase. Stopping scheduler.');
         return;
       }
-      console.error('[scheduler] Retries failed for transition_picking. Rescheduling in 30s.', err?.message);
+      console.error('[scheduler] transition_picking failed after all retries. Rescheduling in 30s.', err?.message);
       schedulePickingTimer(30000);
     }
   }, delayMs);
