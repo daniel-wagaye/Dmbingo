@@ -16,10 +16,9 @@ interface GameStartedProps {
 
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
-const MANUAL_TIMEOUT_MS = 500;
-const AUTO_TIMEOUT_MS = 600;
+const BINGO_TIMEOUT_MS = 800;
 const AUTO_RETRY_DELAY_MS = 100;
-const NO_BINGO_SUPPRESS_MS = 500;
+const NO_BINGO_SUPPRESS_MS = 1500;
 
 function getLetterForNumber(n: number): string {
   if (n >= 1 && n <= 15) return 'B';
@@ -82,6 +81,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   const claimingRef = useRef(false);
   const autoClaimSuppressedForIndex = useRef(-1);
   const prevCalledIndexRef = useRef(0);
+  const calledNumbersSnapshot = useRef<number[]>([]);
 
   // Find ALL my board picks (up to 2)
   const myPicks = useMemo(() => {
@@ -124,7 +124,15 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     if (!gameState || loading) return;
     if (gameState.phase === 'picking') navigate('/game_picking', { replace: true });
     else if (gameState.phase === 'maintenance') navigate('/maintenance', { replace: true });
-    else if (gameState.phase === 'winner_reveal') setShowReveal(true);
+    else if (gameState.phase === 'winner_reveal') {
+      // Snapshot called numbers BEFORE phase changes (so modal has full data)
+      const shuffled = gameState.shuffledNums || [];
+      const ci = gameState.calledIndex;
+      if (ci > 0 && shuffled.length > 0) {
+        calledNumbersSnapshot.current = shuffled.slice(0, ci);
+      }
+      setShowReveal(true);
+    }
   }, [gameState?.phase, loading, navigate]);
 
   useEffect(() => {
@@ -139,8 +147,13 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     if (ci <= prevCalledIndexRef.current) return;
     prevCalledIndexRef.current = ci;
 
-    if (myBoardIds.length === 0) return;
+    // Continuously snapshot called numbers so winner modal always has the latest
     const shuffled = gameState.shuffledNums || [];
+    if (ci > 0 && shuffled.length > 0) {
+      calledNumbersSnapshot.current = shuffled.slice(0, ci);
+    }
+
+    if (myBoardIds.length === 0) return;
     const calledNums = new Set(shuffled.slice(0, ci));
 
     let updated = dabStorage;
@@ -234,7 +247,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     claimingRef.current = true;
     setClaiming(true);
 
-    const timeoutMs = isAuto ? AUTO_TIMEOUT_MS : MANUAL_TIMEOUT_MS;
+    const timeoutMs = BINGO_TIMEOUT_MS;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -488,7 +501,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
           gameState={gameState}
           winners={winners}
           myTelegramId={telegramId}
-          calledNumbers={calledNumbers}
+          calledNumbers={calledNumbersSnapshot.current.length > 0 ? calledNumbersSnapshot.current : calledNumbers}
           timeSync={timeSync}
         />
       )}
