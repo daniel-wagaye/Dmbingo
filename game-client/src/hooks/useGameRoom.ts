@@ -41,7 +41,8 @@ export function useGameRoom(): UseGameRoomReturn {
     roomRef.current = room;
     const s = room.state as any;
     if (s) {
-      setGameState(extractState(s));
+      const state = extractState(s);
+      setGameState(state);
       setPicks(extractPicks(s.picks));
     }
     setConnected(true);

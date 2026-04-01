@@ -101,16 +101,16 @@ export async function createNewPickingGame(): Promise<any> {
 }
 
 // ── Dedicated caller connection (1 permanent connection) ──
-// Also wrapped with queryWithRetry for connection resilience
+// Flat 400ms retry — fast constant retries, not exponential (game must not freeze)
 
 export async function updateCalledIndex(gameId: number, newIndex: number): Promise<void> {
   await queryWithRetry(async () => {
     await callerSql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`;
-  }, 'update_called_index');
+  }, 'update_called_index', 30, 400, true);
 }
 
 export async function setCallingStarted(gameId: number): Promise<void> {
   await queryWithRetry(async () => {
     await callerSql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`;
-  }, 'set_calling_started');
+  }, 'set_calling_started', 30, 400, true);
 }

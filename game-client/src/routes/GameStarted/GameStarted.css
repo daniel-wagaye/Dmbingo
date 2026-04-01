@@ -277,6 +277,21 @@
   margin-top: 4px;
 }
 
+/* Scrollable bingo cards container for small screens */
+.started-cards-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.started-cards-scroll .started-card-box {
+  flex-shrink: 0;
+}
+
 .no-card-msg {
   text-align: center;
   font-size: 13px;
@@ -553,7 +568,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
+  padding: 6px 14px;
   background: rgba(35, 42, 59, 0.6);
   border-radius: 18px;
   margin-bottom: 6px;
@@ -563,7 +578,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
-  padding-right: 26px;
+  padding-right: 16px;
 }
 
 .auto-toggle-btn {

@@ -16,7 +16,7 @@ interface GameStartedProps {
 
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
-const BINGO_TIMEOUT_MS = 800;
+const BINGO_TIMEOUT_MS = 700;
 const AUTO_RETRY_DELAY_MS = 100;
 const NO_BINGO_SUPPRESS_MS = 1500;
 
@@ -106,11 +106,14 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     return result;
   }, [picks]);
 
-  // Load dab storage when gameId changes
+  // Load dab storage when gameId changes + reset refs for fresh reconnect
   useEffect(() => {
     const gid = gameState?.gameId ?? 0;
     if (gid > 0) {
       setDabStorage(loadDabStorage(gid));
+      prevCalledIndexRef.current = 0;
+      autoClaimSuppressedForIndex.current = -1;
+      calledNumbersSnapshot.current = [];
     }
   }, [gameState?.gameId]);
 
@@ -426,6 +429,20 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
               </div>
             ))}
           </div>
+
+          {/* Bingo button — under master sheet for visibility on all screen sizes */}
+          {myBoardIds.length > 0 && !isWinner && (
+            <button
+              className="bingo-btn"
+              onClick={handleClaimBingo}
+              disabled={claiming || autoMode}
+            >
+              {claiming ? <span className="spinner-sm" /> : (autoMode ? t('automatic') : t('bingo'))}
+            </button>
+          )}
+          {isWinner && (
+            <button className="bingo-btn bingo-winner" disabled>{t('winner')}</button>
+          )}
         </div>
 
         <div className="started-right">
@@ -470,29 +487,17 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
             </div>
           )}
 
-          {/* Bingo cards */}
-          {card1 ? (
-            <>
-              {renderCard(card1, firstBoardId!)}
-              {card2 && renderCard(card2, secondBoardId!)}
-            </>
-          ) : (
-            <div className="no-card-msg">{t('no_card_message')}</div>
-          )}
-
-          {/* Bingo button */}
-          {myBoardIds.length > 0 && !isWinner && (
-            <button
-              className="bingo-btn"
-              onClick={handleClaimBingo}
-              disabled={claiming || autoMode}
-            >
-              {claiming ? <span className="spinner-sm" /> : (autoMode ? t('automatic') : t('bingo'))}
-            </button>
-          )}
-          {isWinner && (
-            <button className="bingo-btn bingo-winner" disabled>{t('winner')}</button>
-          )}
+          {/* Bingo cards — scrollable on small screens */}
+          <div className="started-cards-scroll">
+            {card1 ? (
+              <>
+                {renderCard(card1, firstBoardId!)}
+                {card2 && renderCard(card2, secondBoardId!)}
+              </>
+            ) : (
+              <div className="no-card-msg">{t('no_card_message')}</div>
+            )}
+          </div>
         </div>
       </div>
 

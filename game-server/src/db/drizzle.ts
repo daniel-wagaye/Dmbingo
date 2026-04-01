@@ -56,8 +56,8 @@ const isRetryableDbError = (err: unknown): boolean => {
 };
 
 /**
- * Retry a DB operation up to `maxRetries` times with linear-exponential backoff.
- * Base delay = 300ms, increments linearly: 300, 600, 900, 1200, ...
+ * Retry a DB operation with configurable backoff.
+ * @param flatDelay - if true, delay is constant (baseDelayMs every retry). If false, linear: baseDelayMs * attempt.
  * Non-retryable errors (like PG RAISE P0001) fail immediately.
  */
 export async function queryWithRetry<T>(
@@ -65,6 +65,7 @@ export async function queryWithRetry<T>(
   label = 'db',
   maxRetries = 30,
   baseDelayMs = 300,
+  flatDelay = false,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -78,7 +79,7 @@ export async function queryWithRetry<T>(
         }
         throw err;
       }
-      const delayMs = baseDelayMs * attempt;
+      const delayMs = flatDelay ? baseDelayMs : baseDelayMs * attempt;
       console.warn(`[${label}] Attempt ${attempt}/${maxRetries} failed. Retrying in ${delayMs}ms...`);
       await sleep(delayMs);
     }
