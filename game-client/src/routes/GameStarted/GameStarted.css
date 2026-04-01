@@ -467,9 +467,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 6px 16px;
   background: rgba(35, 42, 59, 0.6);
-  border-radius: var(--radius-sm);
+  border-radius: 18px;
   margin-bottom: 6px;
 }
 
@@ -477,6 +477,7 @@
   font-size: 14px;
   font-weight: 600;
   color: #fff;
+  padding-right: 26px;
 }
 
 .auto-toggle-btn {

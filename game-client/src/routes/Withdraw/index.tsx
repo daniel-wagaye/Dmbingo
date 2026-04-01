@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { requestWithdrawal } from '../../services/withdrawService';
 import './Withdraw.css';
 
-const BANKS = ['Telebirr', 'CBEbirr'];
+const BANKS = ['Telebirr'];
 const BANK_RULES: Record<string, RegExp> = {
   CBE: /^\d{6,15}$/,
   BOA: /^\d{6,15}$/,
