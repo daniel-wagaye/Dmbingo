@@ -155,8 +155,8 @@ export default function WinnerRevealModal({
 
         {hasWinners && (
           <>
-            {/* Winner name boxes */}
-            <div className="reveal-winners-list">
+            {/* Winner name boxes — max 2 per row, centered if single */}
+            <div className={`reveal-winners-list${uniqueWinnerCount === 1 ? ' reveal-winners-list-single' : ''}`}>
               {grouped.map(g => {
                 const isMe = g.telegramId === Number(myTelegramId);
                 const initial = (g.name[0] || 'P').toUpperCase();
@@ -166,10 +166,12 @@ export default function WinnerRevealModal({
                 return (
                   <div key={g.telegramId} className={`reveal-winner-box ${isMe ? 'reveal-winner-mine' : ''}`}>
                     <span className="reveal-winner-initial">{initial}</span>
-                    <span className="reveal-winner-name">
-                      {g.boardCount > 1 ? '2x' : '1x'} {g.name}
-                    </span>
-                    <span className="reveal-winner-boards">{boardLabel}</span>
+                    <div className="reveal-winner-info">
+                      <span className="reveal-winner-name">
+                        {g.boardCount > 1 ? '2x' : '1x'} {g.name}
+                      </span>
+                      <span className="reveal-winner-boards">{boardLabel}</span>
+                    </div>
                   </div>
                 );
               })}

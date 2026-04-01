@@ -115,6 +115,24 @@ export function leaveGameRoom(): void {
   reconnectAttempts = 0;
 }
 
+/**
+ * Force-kill the room connection immediately (no 60s delay).
+ * Used when returning from background after the WebSocket is dead.
+ */
+export function forceLeaveGameRoom(): void {
+  intentionalLeave = true;
+  clearPendingLeaveTimeout();
+  clearReconnectTimeout();
+  joinGeneration++;
+  joinPromise = null;
+  const currentRoom = room;
+  room = null;
+  if (currentRoom) {
+    try { currentRoom.leave(true); } catch { /* ignore */ }
+  }
+  reconnectAttempts = 0;
+}
+
 export function getRoom(): Room | null {
   return room;
 }

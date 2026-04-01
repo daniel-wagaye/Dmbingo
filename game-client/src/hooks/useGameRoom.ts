@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { joinGameRoom, leaveGameRoom } from '../services/colyseusClient';
+import { joinGameRoom, leaveGameRoom, forceLeaveGameRoom } from '../services/colyseusClient';
 
 export interface PlayerPick {
   telegramId: number;
@@ -79,8 +79,8 @@ export function useGameRoom(): UseGameRoomReturn {
     // Reconnect when app returns from background (screen on, tab focus, etc.)
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        // Force a fresh join — leaveGameRoom + joinGameRoom
-        leaveGameRoom();
+        // Force-kill the old (potentially dead) connection immediately, then create fresh
+        forceLeaveGameRoom();
         roomRef.current = null;
         setConnected(false);
         connect();

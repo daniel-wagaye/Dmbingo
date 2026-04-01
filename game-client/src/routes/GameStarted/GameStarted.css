@@ -462,6 +462,92 @@
   margin-top: 4px;
 }
 
+.reveal-player-count {
+  text-align: center;
+  font-size: 14px;
+  color: #eab308;
+  font-weight: 600;
+  margin: -8px 0 2px;
+}
+
+.reveal-winners-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  justify-items: center;
+}
+
+.reveal-winners-list-single {
+  grid-template-columns: 1fr;
+}
+
+.reveal-winner-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 22px;
+  background: rgba(55, 65, 81, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  color: #fff;
+  width: 100%;
+  max-width: 180px;
+  box-sizing: border-box;
+}
+
+.reveal-winner-mine {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.reveal-winner-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  background: rgba(255, 140, 0, 0.25);
+  color: #ff8c00;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.reveal-winner-mine .reveal-winner-initial {
+  background: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.reveal-winner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.reveal-winner-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.reveal-winner-boards {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.rc-pattern {
+  background: rgba(34, 197, 94, 0.35);
+  color: #22c55e;
+  font-weight: 700;
+}
+
 /* ===== Automatic Toggle ===== */
 .auto-toggle-row {
   display: flex;
