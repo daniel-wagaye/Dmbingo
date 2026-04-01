@@ -5,3 +5,4 @@ motor
 dnspython
 python-dotenv
 certifi
+supabase
