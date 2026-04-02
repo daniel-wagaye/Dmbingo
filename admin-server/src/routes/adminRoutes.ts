@@ -17,7 +17,7 @@ import {
   listCouponHistory,
   listCoupons,
 } from '../controllers/couponController';
-import { approveDeposit, listDeposits, rejectDeposit } from '../controllers/depositController';
+import { approveDeposit, createDeposit, listDeposits, rejectDeposit } from '../controllers/depositController';
 import {
   getGameConfig,
   startGameStatus,
@@ -274,6 +274,7 @@ router.post('/admins', adminAuth, createAdmin);
 router.put('/admins/:id', adminAuth, updateAdmin);
 router.post('/admins/:id/status', adminAuth, updateAdminStatus);
 router.get('/deposits', adminAuth, listDeposits);
+router.post('/deposits/create', adminAuth, createDeposit);
 router.post('/deposits/reject', adminAuth, rejectDeposit);
 router.post('/deposits/approve', adminAuth, approveDeposit);
 router.get('/withdrawals', adminAuth, listWithdrawals);

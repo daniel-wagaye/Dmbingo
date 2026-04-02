@@ -106,6 +106,64 @@ export const rejectDeposit = async (req: Request, res: Response) => {
   }
 };
 
+export const createDeposit = async (req: Request, res: Response) => {
+  const admin = (req as Request & { admin?: AdminPayload }).admin;
+  if (!admin) return res.status(401).json({ error: 'unauthorized' });
+  if (admin.role !== 'super_admin') return res.status(403).json({ error: 'forbidden' });
+
+  const { actionPassword, bank, amount, txnReference } = req.body as {
+    actionPassword?: string;
+    bank?: string;
+    amount?: number;
+    txnReference?: string;
+  };
+
+  if (!actionPassword || !bank?.trim() || !amount || !txnReference?.trim()) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+  if (amount <= 0) return res.status(400).json({ error: 'invalid_amount' });
+
+  const adminResult = await pool.query(
+    `SELECT admin_id, action_password_hash FROM admins WHERE admin_id = $1`,
+    [admin.adminId]
+  );
+  if (!adminResult.rows.length) return res.status(404).json({ error: 'admin_not_found' });
+
+  const passwordOk = await argon2.verify(adminResult.rows[0].action_password_hash as string, actionPassword);
+  if (!passwordOk) return res.status(401).json({ error: 'invalid_action_password' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const insertResult = await client.query(
+      `INSERT INTO deposits (bank, amount, txn_reference, status, created_at)
+       VALUES ($1, $2, $3, 'pending', NOW())
+       RETURNING deposit_id`,
+      [bank.trim(), amount, txnReference.trim().toUpperCase()]
+    );
+    const depositId = insertResult.rows[0]?.deposit_id;
+
+    const details = JSON.stringify({ depositId, bank: bank.trim(), amount, txnReference: txnReference.trim() });
+    await client.query(
+      `INSERT INTO admin_actions (admin_id, action, target_id, target_type, details, ip_address, user_agent)
+       VALUES ($1, 'create_deposit', $2, 'deposit', $3::jsonb, $4, $5)`,
+      [admin.adminId, depositId, details, req.ip ?? null, req.get('user-agent') ?? null]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ status: 'ok', depositId });
+  } catch (error: any) {
+    await client.query('ROLLBACK');
+    if (error?.constraint === 'deposits_txn_reference_key') {
+      return res.status(409).json({ error: 'duplicate_txn_reference' });
+    }
+    return res.status(500).json({ error: error instanceof Error ? error.message : 'Request failed' });
+  } finally {
+    client.release();
+  }
+};
+
 export const approveDeposit = async (req: Request, res: Response) => {
   const admin = (req as Request & { admin?: AdminPayload }).admin;
   if (!admin) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { approveDeposit, fetchDeposits, rejectDeposit } from '../../services/depositService';
+import { approveDeposit, createDeposit, fetchDeposits, rejectDeposit } from '../../services/depositService';
 
 type DepositRow = {
   deposit_id: number;
@@ -25,11 +25,16 @@ const Deposits = () => {
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedDeposit, setSelectedDeposit] = useState<DepositRow | null>(null);
   const [actionPassword, setActionPassword] = useState('');
   const [reason, setReason] = useState('');
   const [approveTelegramId, setApproveTelegramId] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [createBank, setCreateBank] = useState('');
+  const [createAmount, setCreateAmount] = useState('');
+  const [createTxn, setCreateTxn] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
 
   const loadDeposits = async (nextPage = page) => {
     setLoading(true);
@@ -136,6 +141,35 @@ const Deposits = () => {
     }
   };
 
+  const handleCreateDeposit = async () => {
+    const amt = parseFloat(createAmount);
+    if (!createPassword || !createBank.trim() || !amt || amt <= 0 || !createTxn.trim()) {
+      toast.error('All fields are required.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await createDeposit({
+        actionPassword: createPassword,
+        bank: createBank.trim(),
+        amount: amt,
+        txnReference: createTxn.trim(),
+      });
+      toast.success('Deposit created.');
+      setCreateOpen(false);
+      setCreatePassword('');
+      setCreateBank('');
+      setCreateAmount('');
+      setCreateTxn('');
+      loadDeposits(1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Create failed';
+      toast.error(message === 'duplicate_txn_reference' ? 'Transaction reference already exists.' : message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const statusBadge = (status: string) => status.toLowerCase();
 
   return (
@@ -145,6 +179,9 @@ const Deposits = () => {
           <h1>Deposits</h1>
           <p className="deposits-subtitle">Manual deposit approvals</p>
         </div>
+        <button type="button" className="primary-button" onClick={() => setCreateOpen(true)}>
+          Create Deposit
+        </button>
       </div>
 
       <div className="deposits-table-wrapper">
@@ -332,6 +369,73 @@ const Deposits = () => {
                 disabled={actionLoading}
               >
                 {actionLoading ? 'Processing...' : 'Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h3>Create Deposit</h3>
+              <button type="button" className="icon-button" onClick={() => setCreateOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-field">
+                <label htmlFor="createPassword">Action Password</label>
+                <input
+                  id="createPassword"
+                  type="password"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label htmlFor="createBank">Bank</label>
+                <input
+                  id="createBank"
+                  type="text"
+                  placeholder="e.g. Telebirr, CBEbirr"
+                  value={createBank}
+                  onChange={(e) => setCreateBank(e.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label htmlFor="createAmount">Amount</label>
+                <input
+                  id="createAmount"
+                  type="number"
+                  placeholder="0.00"
+                  value={createAmount}
+                  onChange={(e) => setCreateAmount(e.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label htmlFor="createTxn">Transaction Reference</label>
+                <input
+                  id="createTxn"
+                  type="text"
+                  placeholder="Transaction number"
+                  value={createTxn}
+                  onChange={(e) => setCreateTxn(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleCreateDeposit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Creating...' : 'Create'}
               </button>
             </div>
           </div>

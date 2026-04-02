@@ -68,3 +68,14 @@ export const approveDeposit = async (payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+export const createDeposit = async (payload: {
+  actionPassword: string;
+  bank: string;
+  amount: number;
+  txnReference: string;
+}) =>
+  request<{ status: 'ok'; depositId: number }>('/admin/deposits/create', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
