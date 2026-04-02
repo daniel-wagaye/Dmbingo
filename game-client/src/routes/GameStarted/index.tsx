@@ -17,7 +17,7 @@ interface GameStartedProps {
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
 const BINGO_TIMEOUT_MS = 800;
-const AUTO_RETRY_DELAY_MS = 300;
+const AUTO_RETRY_DELAY_MS = 400;
 const NO_BINGO_SUPPRESS_MS = 1500;
 
 function getLetterForNumber(n: number): string {
@@ -292,29 +292,31 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
       }
     } catch (err: any) {
       clearTimeout(timer);
-      if (err.name === 'AbortError') {
-        if (isAuto) {
-          toast.error(t('bingo_timeout_auto'));
-          setTimeout(() => {
-            claimingRef.current = false;
-            setClaiming(false);
-            doClaimBingo(true);
-          }, AUTO_RETRY_DELAY_MS);
-          return;
-        } else {
-          toast.error(t('bingo_timeout'));
-        }
-      } else if (!navigator.onLine) {
+      // Check offline FIRST — AbortError can also fire when offline
+      const offline = !navigator.onLine;
+      if (offline) {
         if (isAuto) {
           toast.error(t('no_internet_auto'));
           setTimeout(() => {
             claimingRef.current = false;
             setClaiming(false);
-            doClaimBingo(true);
+            if (gameState?.phase === 'started') doClaimBingo(true);
           }, AUTO_RETRY_DELAY_MS);
           return;
         } else {
           toast.error(t('no_internet'));
+        }
+      } else if (err.name === 'AbortError') {
+        if (isAuto) {
+          toast.error(t('bingo_timeout_auto'));
+          setTimeout(() => {
+            claimingRef.current = false;
+            setClaiming(false);
+            if (gameState?.phase === 'started') doClaimBingo(true);
+          }, AUTO_RETRY_DELAY_MS);
+          return;
+        } else {
+          toast.error(t('bingo_timeout'));
         }
       }
     } finally {

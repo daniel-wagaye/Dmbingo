@@ -37,6 +37,7 @@ export function useGameRoom(): UseGameRoomReturn {
   const mountedRef = useRef(true);
   const roomRef = useRef<any>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isReconnectingRef = useRef(false);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -49,10 +50,13 @@ export function useGameRoom(): UseGameRoomReturn {
     if (!mountedRef.current) return;
     clearReconnectTimer();
 
-    try {
-      forceLeaveGameRoom();
-      roomRef.current = null;
+    // Mark that we're intentionally reconnecting so onLeave doesn't trigger another doConnect
+    isReconnectingRef.current = true;
+    forceLeaveGameRoom();
+    roomRef.current = null;
+    isReconnectingRef.current = false;
 
+    try {
       const room = await joinGameRoom();
       if (!mountedRef.current) return;
 
@@ -73,25 +77,25 @@ export function useGameRoom(): UseGameRoomReturn {
 
       room.onLeave((code: number) => {
         if (!mountedRef.current) return;
-        console.log(`[useGameRoom] Room left (code ${code}). Scheduling reconnect...`);
+        // Skip auto-reconnect if this leave was triggered by our own doConnect
+        if (isReconnectingRef.current) return;
+        console.log(`[useGameRoom] Room left unexpectedly (code ${code}). Auto-reconnecting in 2s...`);
         setConnected(false);
         roomRef.current = null;
-        // Auto-reconnect after network drop (not intentional leave)
         clearReconnectTimer();
         reconnectTimerRef.current = setTimeout(() => {
           if (mountedRef.current) doConnect();
-        }, 1500);
+        }, 2000);
       });
     } catch (err) {
       console.error('[useGameRoom] Connect failed:', err);
       if (!mountedRef.current) return;
       setLoading(false);
       setConnected(false);
-      // Retry connect after failure
       clearReconnectTimer();
       reconnectTimerRef.current = setTimeout(() => {
         if (mountedRef.current) doConnect();
-      }, 2000);
+      }, 3000);
     }
   }, [clearReconnectTimer]);
 
@@ -99,14 +103,12 @@ export function useGameRoom(): UseGameRoomReturn {
     mountedRef.current = true;
     doConnect();
 
-    // Reconnect when app returns from background
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
         doConnect();
       }
     };
 
-    // Reconnect when network comes back online
     const handleOnline = () => {
       if (mountedRef.current) {
         console.log('[useGameRoom] Network online. Reconnecting...');
