@@ -37,7 +37,9 @@ export function useGameRoom(): UseGameRoomReturn {
   const mountedRef = useRef(true);
   const roomRef = useRef<any>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isReconnectingRef = useRef(false);
+  const connectingRef = useRef(false);
+  const subscribedRoomRef = useRef<any>(null);
+  const suppressLeaveCountRef = useRef(0);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -46,17 +48,22 @@ export function useGameRoom(): UseGameRoomReturn {
     }
   }, []);
 
-  const doConnect = useCallback(async () => {
+  const doConnect = useCallback(async (options?: { force?: boolean; reason?: string }) => {
     if (!mountedRef.current) return;
+    if (connectingRef.current) return;
+
+    connectingRef.current = true;
     clearReconnectTimer();
 
-    // Mark that we're intentionally reconnecting so onLeave doesn't trigger another doConnect
-    isReconnectingRef.current = true;
-    forceLeaveGameRoom();
-    roomRef.current = null;
-    isReconnectingRef.current = false;
-
     try {
+      if (options?.force && roomRef.current) {
+        suppressLeaveCountRef.current += 1;
+        forceLeaveGameRoom();
+        roomRef.current = null;
+        subscribedRoomRef.current = null;
+        setConnected(false);
+      }
+
       const room = await joinGameRoom();
       if (!mountedRef.current) return;
 
@@ -69,24 +76,30 @@ export function useGameRoom(): UseGameRoomReturn {
       setConnected(true);
       setLoading(false);
 
-      room.onStateChange((state: any) => {
-        if (!mountedRef.current) return;
-        setGameState(extractState(state));
-        setPicks(extractPicks(state.picks));
-      });
+      if (subscribedRoomRef.current !== room) {
+        subscribedRoomRef.current = room;
+        room.onStateChange((state: any) => {
+          if (!mountedRef.current) return;
+          setGameState(extractState(state));
+          setPicks(extractPicks(state.picks));
+        });
 
-      room.onLeave((code: number) => {
-        if (!mountedRef.current) return;
-        // Skip auto-reconnect if this leave was triggered by our own doConnect
-        if (isReconnectingRef.current) return;
-        console.log(`[useGameRoom] Room left unexpectedly (code ${code}). Auto-reconnecting in 2s...`);
-        setConnected(false);
-        roomRef.current = null;
-        clearReconnectTimer();
-        reconnectTimerRef.current = setTimeout(() => {
-          if (mountedRef.current) doConnect();
-        }, 2000);
-      });
+        room.onLeave((code: number) => {
+          if (!mountedRef.current) return;
+          if (suppressLeaveCountRef.current > 0) {
+            suppressLeaveCountRef.current -= 1;
+            return;
+          }
+          console.log(`[useGameRoom] Room left unexpectedly (code ${code}). Auto-reconnecting in 2s...`);
+          setConnected(false);
+          roomRef.current = null;
+          subscribedRoomRef.current = null;
+          clearReconnectTimer();
+          reconnectTimerRef.current = setTimeout(() => {
+            if (mountedRef.current) doConnect();
+          }, 2000);
+        });
+      }
     } catch (err) {
       console.error('[useGameRoom] Connect failed:', err);
       if (!mountedRef.current) return;
@@ -96,6 +109,8 @@ export function useGameRoom(): UseGameRoomReturn {
       reconnectTimerRef.current = setTimeout(() => {
         if (mountedRef.current) doConnect();
       }, 3000);
+    } finally {
+      connectingRef.current = false;
     }
   }, [clearReconnectTimer]);
 
@@ -105,14 +120,14 @@ export function useGameRoom(): UseGameRoomReturn {
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        doConnect();
+        doConnect({ force: true, reason: 'visibility' });
       }
     };
 
     const handleOnline = () => {
       if (mountedRef.current) {
         console.log('[useGameRoom] Network online. Reconnecting...');
-        doConnect();
+        doConnect({ force: true, reason: 'online' });
       }
     };
 
@@ -124,6 +139,7 @@ export function useGameRoom(): UseGameRoomReturn {
       clearReconnectTimer();
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('online', handleOnline);
+      subscribedRoomRef.current = null;
       leaveGameRoom();
     };
   }, [doConnect, clearReconnectTimer]);
