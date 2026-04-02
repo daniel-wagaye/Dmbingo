@@ -36,65 +36,95 @@ export function useGameRoom(): UseGameRoomReturn {
   const [connected, setConnected] = useState(false);
   const mountedRef = useRef(true);
   const roomRef = useRef<any>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const attachListeners = useCallback((room: any) => {
-    roomRef.current = room;
-    const s = room.state as any;
-    if (s) {
-      const state = extractState(s);
-      setGameState(state);
-      setPicks(extractPicks(s.picks));
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
     }
-    setConnected(true);
-    setLoading(false);
-
-    room.onStateChange((state: any) => {
-      if (!mountedRef.current) return;
-      setGameState(extractState(state));
-      setPicks(extractPicks(state.picks));
-    });
-
-    room.onLeave(() => {
-      if (!mountedRef.current) return;
-      setConnected(false);
-      roomRef.current = null;
-    });
   }, []);
 
-  const connect = useCallback(async () => {
+  const doConnect = useCallback(async () => {
+    if (!mountedRef.current) return;
+    clearReconnectTimer();
+
     try {
+      forceLeaveGameRoom();
+      roomRef.current = null;
+
       const room = await joinGameRoom();
       if (!mountedRef.current) return;
-      attachListeners(room);
+
+      roomRef.current = room;
+      const s = room.state as any;
+      if (s) {
+        setGameState(extractState(s));
+        setPicks(extractPicks(s.picks));
+      }
+      setConnected(true);
+      setLoading(false);
+
+      room.onStateChange((state: any) => {
+        if (!mountedRef.current) return;
+        setGameState(extractState(state));
+        setPicks(extractPicks(state.picks));
+      });
+
+      room.onLeave((code: number) => {
+        if (!mountedRef.current) return;
+        console.log(`[useGameRoom] Room left (code ${code}). Scheduling reconnect...`);
+        setConnected(false);
+        roomRef.current = null;
+        // Auto-reconnect after network drop (not intentional leave)
+        clearReconnectTimer();
+        reconnectTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) doConnect();
+        }, 1500);
+      });
     } catch (err) {
-      console.error('[useGameRoom] Failed to connect:', err);
+      console.error('[useGameRoom] Connect failed:', err);
       if (!mountedRef.current) return;
       setLoading(false);
+      setConnected(false);
+      // Retry connect after failure
+      clearReconnectTimer();
+      reconnectTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) doConnect();
+      }, 2000);
     }
-  }, [attachListeners]);
+  }, [clearReconnectTimer]);
 
   useEffect(() => {
     mountedRef.current = true;
-    connect();
+    doConnect();
 
-    // Reconnect when app returns from background (screen on, tab focus, etc.)
+    // Reconnect when app returns from background
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        // Force-kill the old (potentially dead) connection immediately, then create fresh
-        forceLeaveGameRoom();
-        roomRef.current = null;
-        setConnected(false);
-        connect();
+        doConnect();
       }
     };
+
+    // Reconnect when network comes back online
+    const handleOnline = () => {
+      if (mountedRef.current) {
+        console.log('[useGameRoom] Network online. Reconnecting...');
+        doConnect();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', handleOnline);
 
     return () => {
       mountedRef.current = false;
+      clearReconnectTimer();
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', handleOnline);
       leaveGameRoom();
     };
-  }, [connect]);
+  }, [doConnect, clearReconnectTimer]);
 
   return { gameState, picks, loading, connected };
 }

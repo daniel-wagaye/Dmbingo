@@ -39,7 +39,7 @@
   "board_taken": "ሰሌዳው በሌሎች ተመርጧል።",
   "insufficient_funds": "ለመምረጥ በቂ ቀሪ ገንዘብ የለም።",
   "picking_closed": "የመምረጫ ጊዜ አልቋል።",
-  "server_error": "የአገልጋይ ስህተት — እንደገና ይሞክሩ።",
+  "server_error": "ኢንተርኔት ችግር — እንደገና ይሞክሩ።",
   "rate_limit_error": "በጣም ብዙ ጥያቄዎች። ቆይተው ይሞክሩ።",
   "game_not_available": "ጨዋታ አልተገኘም",
   "max_2_boards": "አንድ ተጫዋች ከሁለት በላይ ሰሌዳ ቁጥር መምረጥ አይችልም",

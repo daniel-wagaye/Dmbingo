@@ -16,8 +16,8 @@ interface GameStartedProps {
 
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
-const BINGO_TIMEOUT_MS = 700;
-const AUTO_RETRY_DELAY_MS = 100;
+const BINGO_TIMEOUT_MS = 800;
+const AUTO_RETRY_DELAY_MS = 300;
 const NO_BINGO_SUPPRESS_MS = 1500;
 
 function getLetterForNumber(n: number): string {
@@ -146,6 +146,8 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   // ── Auto-dab + auto-claim on new called number ──
   useEffect(() => {
     if (!gameState || !gameState.callingStarted || isWinner) return;
+    // Stop auto-claim if game phase changed (winner_reveal, picking, maintenance)
+    if (gameState.phase !== 'started') return;
     const ci = gameState.calledIndex;
     if (ci <= prevCalledIndexRef.current) return;
     prevCalledIndexRef.current = ci;
@@ -242,6 +244,8 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   // ── Bingo claim with timeout ──
   const doClaimBingo = useCallback(async (isAuto: boolean) => {
     if (!gameState || myBoardIds.length === 0 || claimingRef.current || isWinner) return;
+    // Don't claim if game is no longer in started phase
+    if (gameState.phase !== 'started') return;
     if (gameState.calledIndex < 2) {
       if (!isAuto) toast.error(t('please_wait'));
       return;

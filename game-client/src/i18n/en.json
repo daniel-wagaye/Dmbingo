@@ -39,7 +39,7 @@
   "board_taken": "Board is selected by others.",
   "insufficient_funds": "Insufficient balance to pick.",
   "picking_closed": "Picking phase ended.",
-  "server_error": "Server error — try again.",
+  "server_error": "NO internet — try again.",
   "rate_limit_error": "Too many requests. Try again later.",
   "game_not_available": "Game not available",
   "max_2_boards": "One player can't pick more than two board numbers",
