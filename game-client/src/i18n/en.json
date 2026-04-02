@@ -54,7 +54,7 @@
   "bingo": "BINGO!",
   "automatic": "Automatic",
   "no_bingo": "No Bingo!",
-  "bingo_timeout": "Request taking long time",
+  "bingo_timeout": "Request taking long time, please try again",
   "bingo_timeout_auto": "Request taking long time, trying again ...",
   "no_internet": "No internet",
   "no_internet_auto": "No internet, trying again ...",

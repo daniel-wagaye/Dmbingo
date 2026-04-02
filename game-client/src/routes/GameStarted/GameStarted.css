@@ -292,9 +292,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.started-cards-scroll .started-card-box {
-  flex-shrink: 0;
-}
+
 
 .no-card-msg {
   text-align: center;
