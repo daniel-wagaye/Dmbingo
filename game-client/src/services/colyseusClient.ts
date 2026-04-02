@@ -14,21 +14,9 @@ const client = new Client(deriveWsUrl());
 let room: Room | null = null;
 let joinPromise: Promise<Room> | null = null;
 let joinGeneration = 0;
-let reconnectAttempts = 0;
-let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let intentionalLeave = false;
 const JOIN_CANCELLED = 'JOIN_CANCELLED';
-
-const getReconnectDelay = (attempt: number): number =>
-  Math.min(1000 * Math.pow(2, attempt), 30000);
-
-function clearReconnectTimeout(): void {
-  if (reconnectTimeout) {
-    clearTimeout(reconnectTimeout);
-    reconnectTimeout = null;
-  }
-}
 
 function clearPendingLeaveTimeout(): void {
   if (pendingLeaveTimeout) {
@@ -37,23 +25,11 @@ function clearPendingLeaveTimeout(): void {
   }
 }
 
-function scheduleReconnect(): void {
-  if (intentionalLeave || reconnectTimeout) return;
-  const delay = getReconnectDelay(reconnectAttempts);
-  console.log(`[colyseus] Reconnecting in ${delay}ms...`);
-  reconnectTimeout = setTimeout(async () => {
-    reconnectTimeout = null;
-    reconnectAttempts++;
-    try { await joinGameRoom(); } catch { return; }
-  }, delay);
-}
-
 export async function joinGameRoom(): Promise<Room> {
   clearPendingLeaveTimeout();
   intentionalLeave = false;
   if (room) return room;
   if (joinPromise) return joinPromise;
-  clearReconnectTimeout();
   const generation = ++joinGeneration;
 
   joinPromise = (async () => {
@@ -68,14 +44,12 @@ export async function joinGameRoom(): Promise<Room> {
         throw new Error(JOIN_CANCELLED);
       }
       room = joinedRoom;
-      reconnectAttempts = 0;
 
       joinedRoom.onLeave((code) => {
         console.log(`[colyseus] Left room (code ${code})`);
         if (room !== joinedRoom) return;
         room = null;
         joinPromise = null;
-        scheduleReconnect();
       });
 
       return joinedRoom;
@@ -85,7 +59,6 @@ export async function joinGameRoom(): Promise<Room> {
       }
       console.error('[colyseus] Failed to join room:', error);
       room = null;
-      scheduleReconnect();
       throw error;
     } finally {
       if (generation === joinGeneration) {
@@ -100,7 +73,6 @@ export async function joinGameRoom(): Promise<Room> {
 export function leaveGameRoom(): void {
   intentionalLeave = true;
   clearPendingLeaveTimeout();
-  clearReconnectTimeout();
   joinGeneration++;
   joinPromise = null;
   const currentRoom = room;
@@ -112,7 +84,6 @@ export function leaveGameRoom(): void {
       currentRoom.leave();
     }, 60000);
   }
-  reconnectAttempts = 0;
 }
 
 /**
@@ -122,7 +93,6 @@ export function leaveGameRoom(): void {
 export function forceLeaveGameRoom(): void {
   intentionalLeave = true;
   clearPendingLeaveTimeout();
-  clearReconnectTimeout();
   joinGeneration++;
   joinPromise = null;
   const currentRoom = room;
@@ -130,7 +100,6 @@ export function forceLeaveGameRoom(): void {
   if (currentRoom) {
     try { currentRoom.leave(true); } catch { /* ignore */ }
   }
-  reconnectAttempts = 0;
 }
 
 export function getRoom(): Room | null {
