@@ -8,7 +8,7 @@ import {
 import { schedulePickingTimer } from './scheduler';
 import { activeRoom } from '../colyseus/GameRoom';
 
-let callingInterval: ReturnType<typeof setInterval> | null = null;
+let callingTimer: ReturnType<typeof setTimeout> | null = null;
 let activeGameId: number | null = null;
 let currentIndex = 0;
 let totalNums = 75;
@@ -16,9 +16,9 @@ let winnerDetected = false;
 let acceptanceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function stopCallingLoop(): void {
-  if (callingInterval) {
-    clearInterval(callingInterval);
-    callingInterval = null;
+  if (callingTimer) {
+    clearTimeout(callingTimer);
+    callingTimer = null;
   }
   if (acceptanceTimer) {
     clearTimeout(acceptanceTimer);
@@ -33,9 +33,9 @@ export function onWinnerDetected(): void {
   if (winnerDetected) return;
   winnerDetected = true;
 
-  if (callingInterval) {
-    clearInterval(callingInterval);
-    callingInterval = null;
+  if (callingTimer) {
+    clearTimeout(callingTimer);
+    callingTimer = null;
   }
 
   console.log(`[caller] Winner detected for game ${activeGameId}. Starting ${config.winnerAcceptanceWindowMs}ms acceptance window.`);
@@ -97,6 +97,64 @@ function scheduleRevealEnd(): void {
   }, config.winnerRevealDurationMs);
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label}_TIMEOUT`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function scheduleNextTick(gameId: number): void {
+  if (winnerDetected || activeGameId !== gameId) return;
+  callingTimer = setTimeout(() => {
+    void runTick(gameId);
+  }, config.callingIntervalMs);
+}
+
+async function runTick(gameId: number): Promise<void> {
+  if (winnerDetected || activeGameId !== gameId) {
+    if (callingTimer) {
+      clearTimeout(callingTimer);
+      callingTimer = null;
+    }
+    return;
+  }
+
+  currentIndex++;
+  if (currentIndex > totalNums) {
+    if (callingTimer) {
+      clearTimeout(callingTimer);
+      callingTimer = null;
+    }
+    console.log(`[caller] All 75 numbers called for game ${gameId}. Finalizing (no winner).`);
+    await runFinalization();
+    return;
+  }
+
+  try {
+    await updateCalledIndex(gameId, currentIndex);
+    if (activeRoom) {
+      activeRoom.setCalledIndex(currentIndex);
+    }
+  } catch (err) {
+    console.error(`[caller] Failed to persist called_index ${currentIndex} after all retries:`, err);
+  }
+
+  scheduleNextTick(gameId);
+}
+
 export function startCallingLoop(gameId: number, _shuffledNums: number[]): void {
   stopCallingLoop();
 
@@ -110,48 +168,22 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
   setTimeout(async () => {
     if (activeGameId !== gameId) return;
 
+    const startupTimeoutMs = Math.max(config.callingIntervalMs * 2, 8000);
     try {
-      // setCallingStarted has 30-retry inside gameService
-      await setCallingStarted(gameId);
+      await withTimeout(setCallingStarted(gameId), startupTimeoutMs, 'set_calling_started');
       console.log(`[caller] Game ${gameId}: calling_started = true`);
-
-      if (activeRoom) {
-        activeRoom.setCallingStarted();
-      }
-
-      callingInterval = setInterval(async () => {
-        if (winnerDetected || activeGameId !== gameId) {
-          if (callingInterval) {
-            clearInterval(callingInterval);
-            callingInterval = null;
-          }
-          return;
-        }
-
-        currentIndex++;
-        if (currentIndex > totalNums) {
-          if (callingInterval) {
-            clearInterval(callingInterval);
-            callingInterval = null;
-          }
-          console.log(`[caller] All 75 numbers called for game ${gameId}. Finalizing (no winner).`);
-          await runFinalization();
-          return;
-        }
-
-        try {
-          // updateCalledIndex has 30-retry inside gameService
-          await updateCalledIndex(gameId, currentIndex);
-          if (activeRoom) {
-            activeRoom.setCalledIndex(currentIndex);
-          }
-        } catch (err) {
-          console.error(`[caller] Failed to persist called_index ${currentIndex} after all retries:`, err);
-        }
-      }, config.callingIntervalMs);
     } catch (err) {
-      console.error('[caller] set_calling_started failed after all retries:', err);
-      stopCallingLoop();
+      console.error('[caller] set_calling_started startup stalled. Continuing caller loop:', err);
+      void setCallingStarted(gameId).then(
+        () => console.log(`[caller] Game ${gameId}: calling_started persisted on delayed retry`),
+        (retryErr) => console.error('[caller] set_calling_started delayed retry failed:', retryErr)
+      );
     }
+
+    if (activeRoom) {
+      activeRoom.setCallingStarted();
+    }
+
+    scheduleNextTick(gameId);
   }, config.callingStartDelayMs);
 }
