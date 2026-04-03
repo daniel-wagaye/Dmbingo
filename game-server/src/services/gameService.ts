@@ -1,4 +1,4 @@
-import { gameSql, callerSql, queryWithRetry } from '../db/drizzle';
+import { gameSql, callerStartSql, callerTickSql, queryWithRetry } from '../db/drizzle';
 
 // ── Game pool operations (picks, claims, transitions) ──
 // All critical PG functions wrapped with queryWithRetry (30 retries, 300ms base delay)
@@ -105,12 +105,12 @@ export async function createNewPickingGame(): Promise<any> {
 
 export async function updateCalledIndex(gameId: number, newIndex: number): Promise<void> {
   await queryWithRetry(async () => {
-    await callerSql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`;
+    await callerTickSql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`;
   }, 'update_called_index', 30, 400, true);
 }
 
 export async function setCallingStarted(gameId: number): Promise<void> {
   await queryWithRetry(async () => {
-    await callerSql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`;
+    await callerStartSql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`;
   }, 'set_calling_started', 30, 400, true);
 }

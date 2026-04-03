@@ -20,8 +20,11 @@ export const userSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 8 }
 // ── Coupon pool (2) — coupon redemption only ──
 export const couponSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 2 });
 
-// ── Dedicated caller connection (1) — number calling loop only ──
-export const callerSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 1 });
+// ── Dedicated caller connection (1) — called_index writes ──
+export const callerTickSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 1 });
+
+// ── Dedicated caller connection (1) — calling_started write ──
+export const callerStartSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 1 });
 
 // Legacy alias
 export const sql: Sql = gameSql;
