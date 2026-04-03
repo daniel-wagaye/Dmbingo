@@ -1,14 +1,7 @@
-import fs from 'fs';
-import path from 'path';
 import postgres, { Sql } from 'postgres';
 import { config } from '../config';
 
-const caCert = fs.readFileSync(
-  path.join(__dirname, '..', '..', 'certs', 'prod-ca-2021.crt'),
-  'utf-8'
-);
-
-const sslOpts = { rejectUnauthorized: true, ca: caCert };
+const sslOpts = { rejectUnauthorized: false };
 const baseOpts = {
   ssl: sslOpts,
   idle_timeout: config.dbIdleTimeoutSeconds,

@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { QueryResult, QueryResultRow } from 'pg';
 import type { PoolClient } from 'pg';
@@ -9,9 +7,6 @@ import { config } from '../config';
 if (!config.databaseUrl) {
   throw new Error('DATABASE_URL is required');
 }
-
-const caPath = path.resolve(__dirname, '../../certs/prod-ca-2021.crt');
-const ca = fs.readFileSync(caPath, 'utf8');
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -76,8 +71,7 @@ export const pool = new Pool({
   connectionTimeoutMillis: config.dbConnectionTimeoutMs,
   allowExitOnIdle: true,
   ssl: {
-    ca,
-    rejectUnauthorized: true,
+    rejectUnauthorized: false,
   },
 });
 
