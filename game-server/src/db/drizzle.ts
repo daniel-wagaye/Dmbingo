@@ -11,6 +11,15 @@ const baseOpts = {
   onnotice() { /* suppress */ },
 } as any;
 
+const callerWriteOpts = {
+  ...baseOpts,
+  max: 1,
+  connection: {
+    statement_timeout: `${config.dbStatementTimeoutMs}`,
+    lock_timeout: `${config.dbLockTimeoutMs}`,
+  },
+} as any;
+
 // ── Game pool (10) — picks, claims, phase transitions ──
 export const gameSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 10 });
 
@@ -21,10 +30,10 @@ export const userSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 8 }
 export const couponSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 2 });
 
 // ── Dedicated caller connection (1) — called_index writes ──
-export const callerTickSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 1 });
+export const callerTickSql: Sql = postgres(config.databaseUrl, callerWriteOpts);
 
 // ── Dedicated caller connection (1) — calling_started write ──
-export const callerStartSql: Sql = postgres(config.databaseUrl, { ...baseOpts, max: 1 });
+export const callerStartSql: Sql = postgres(config.databaseUrl, callerWriteOpts);
 
 // Legacy alias
 export const sql: Sql = gameSql;
@@ -39,6 +48,7 @@ const isRetryableDbError = (err: unknown): boolean => {
   const retryableCodes = new Set([
     '08000', '08001', '08003', '08004', '08006', '08007', '08P01',
     '57P01', '57P02', '57P03', '53300', '55000',
+    '57014', '55P03',
     '40001', '40P01',
     'CONNECT_TIMEOUT',
   ]);

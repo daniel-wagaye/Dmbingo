@@ -54,6 +54,8 @@ export const config = {
   dbIdleTimeoutSeconds: parseInt(process.env.DB_IDLE_TIMEOUT_SECONDS || '30', 10),
   dbConnectTimeoutSeconds: parseInt(process.env.DB_CONNECT_TIMEOUT_SECONDS || '30', 10),
   dbMaxLifetimeSeconds: parseInt(process.env.DB_MAX_LIFETIME_SECONDS || '3600', 10),
+  dbStatementTimeoutMs: parseInt(process.env.DB_STATEMENT_TIMEOUT_MS || '6000', 10),
+  dbLockTimeoutMs: parseInt(process.env.DB_LOCK_TIMEOUT_MS || '1500', 10),
   dbQueryMaxRetries: parseInt(process.env.DB_QUERY_MAX_RETRIES || '4', 10),
   dbRetryBaseDelayMs: parseInt(process.env.DB_RETRY_BASE_DELAY_MS || '250', 10),
   rateLimitCleanupTimeUtc: process.env.RATE_LIMIT_CLEANUP_TIME_UTC || '00:00',

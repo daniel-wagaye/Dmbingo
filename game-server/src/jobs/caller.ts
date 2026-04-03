@@ -14,6 +14,7 @@ let currentIndex = 0;
 let totalNums = 75;
 let winnerDetected = false;
 let acceptanceTimer: ReturnType<typeof setTimeout> | null = null;
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function stopCallingLoop(): void {
   if (callingTimer) {
@@ -116,6 +117,27 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   });
 }
 
+async function persistCallingStarted(gameId: number): Promise<void> {
+  const maxAttempts = 12;
+  const timeoutPerAttemptMs = Math.max(config.callingIntervalMs, 1500);
+  const retryDelayMs = Math.min(Math.max(config.callingIntervalMs, 500), 2000);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (activeGameId !== gameId || winnerDetected) return;
+    try {
+      await withTimeout(setCallingStarted(gameId), timeoutPerAttemptMs, 'set_calling_started');
+      console.log(`[caller] Game ${gameId}: calling_started = true`);
+      return;
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        console.error(`[caller] Game ${gameId}: failed to persist calling_started after ${maxAttempts} attempts`, err);
+        return;
+      }
+      await sleep(retryDelayMs);
+    }
+  }
+}
+
 function scheduleNextTick(gameId: number): void {
   if (winnerDetected || activeGameId !== gameId) return;
   callingTimer = setTimeout(() => {
@@ -165,25 +187,14 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
 
   console.log(`[caller] Starting calling loop for game ${gameId}. ${config.callingStartDelayMs}ms loading delay...`);
 
-  setTimeout(async () => {
+  setTimeout(() => {
     if (activeGameId !== gameId) return;
-
-    const startupTimeoutMs = Math.max(config.callingIntervalMs * 2, 8000);
-    try {
-      await withTimeout(setCallingStarted(gameId), startupTimeoutMs, 'set_calling_started');
-      console.log(`[caller] Game ${gameId}: calling_started = true`);
-    } catch (err) {
-      console.error('[caller] set_calling_started startup stalled. Continuing caller loop:', err);
-      void setCallingStarted(gameId).then(
-        () => console.log(`[caller] Game ${gameId}: calling_started persisted on delayed retry`),
-        (retryErr) => console.error('[caller] set_calling_started delayed retry failed:', retryErr)
-      );
-    }
 
     if (activeRoom) {
       activeRoom.setCallingStarted();
     }
 
     scheduleNextTick(gameId);
+    void persistCallingStarted(gameId);
   }, config.callingStartDelayMs);
 }
