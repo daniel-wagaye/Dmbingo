@@ -3,11 +3,11 @@ import { config } from '../config';
 import { isAllowed } from '../middlewares/rateLimitPerUser';
 import {
   callPickBoard,
-  callClaimBingo,
   createNewPickingGame,
   getLatestGame,
   getGameStatus,
 } from '../services/gameService';
+import { getBingoCard, hasBingoPattern } from '../services/bingoValidator';
 import { schedulePickingTimer } from '../jobs/scheduler';
 import { activeRoom } from '../colyseus/GameRoom';
 
@@ -64,10 +64,10 @@ export async function pickBoard(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Push to Colyseus room
+    // Push to Colyseus room (store winner_name from PG function)
     if (activeRoom && result.success) {
       if (result.action === 'pick') {
-        activeRoom.updatePick(boardId, telegramId, false, '');
+        activeRoom.updatePick(boardId, telegramId, false, result.winner_name || '');
       } else if (result.action === 'unpick') {
         activeRoom.updatePick(boardId, 0, false, '');
       }
@@ -105,27 +105,71 @@ export async function claimBingo(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const result = await callClaimBingo(boardIds, telegramId);
-
-    if (!result) {
+    // ── In-memory validation using Colyseus state ──
+    if (!activeRoom) {
       res.status(200).json({ action: 'ignore' });
       return;
     }
 
-    // Push winner boards to Colyseus room
-    if (activeRoom && result.action === 'winner' && result.winner_boards) {
-      for (const wb of result.winner_boards) {
-        activeRoom.updatePick(Number(wb), telegramId, true, result.winner_name || '');
+    const state = activeRoom.state;
+
+    // Must be in started phase with calling active
+    if (state.phase !== 'started' || !state.callingStarted) {
+      res.status(200).json({ action: 'no_bingo' });
+      return;
+    }
+
+    // Build called numbers set from Colyseus state
+    const shuffled = state.shuffledNums;
+    const calledSet = new Set<number>();
+    for (let i = 0; i < state.calledIndex && i < shuffled.length; i++) {
+      calledSet.add(shuffled[i]);
+    }
+
+    // Validate each claimed board
+    const winnerBoards: number[] = [];
+    let winnerName = '';
+
+    for (const bid of boardIds) {
+      // Verify this board is picked by the claiming user
+      const pick = state.picks.get(bid.toString());
+      if (!pick || Number(pick.telegramId) !== Number(telegramId)) {
+        continue; // not their board — skip
+      }
+
+      // Already marked winner — skip
+      if (pick.winner) continue;
+
+      // Get card from in-memory cache
+      const card = getBingoCard(bid);
+      if (!card) continue;
+
+      // Check bingo pattern
+      if (hasBingoPattern(card, calledSet)) {
+        winnerBoards.push(bid);
+        if (!winnerName) winnerName = pick.winnerName || '';
       }
     }
 
-    // Trigger winner flow
-    if (result.action === 'winner') {
-      const { onWinnerDetected } = await import('../jobs/caller');
-      onWinnerDetected();
+    if (winnerBoards.length === 0) {
+      res.status(200).json({ action: 'no_bingo' });
+      return;
     }
 
-    res.status(200).json(result);
+    // Mark winner boards in Colyseus state
+    for (const wb of winnerBoards) {
+      activeRoom.updatePick(wb, telegramId, true, winnerName);
+    }
+
+    // Trigger winner acceptance window (stops calling, starts finalization timer)
+    const { onWinnerDetected } = await import('../jobs/caller');
+    onWinnerDetected();
+
+    res.status(200).json({
+      action: 'winner',
+      winner_boards: winnerBoards,
+      winner_name: winnerName,
+    });
   } catch (err) {
     console.error('[claimBingo]', err);
     res.status(200).json({ action: 'ignore', message: 'error' });

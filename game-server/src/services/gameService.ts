@@ -1,4 +1,4 @@
-import { gameSql, callerStartSql, callerTickSql, queryWithRetry } from '../db/drizzle';
+import { gameSql, queryWithRetry } from '../db/drizzle';
 
 // ── Game pool operations (picks, claims, transitions) ──
 // All critical PG functions wrapped with queryWithRetry (30 retries, 300ms base delay)
@@ -17,16 +17,10 @@ export async function callTransitionPicking(): Promise<any> {
   }, 'transition_picking');
 }
 
-export async function callClaimBingo(boardIds: number[], telegramId: number): Promise<any> {
+export async function callFinalizeGame(winnerBoardIds?: number[]): Promise<any> {
+  const ids = winnerBoardIds && winnerBoardIds.length > 0 ? winnerBoardIds : null;
   return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT claim_bingo(${boardIds}::smallint[], ${telegramId}::bigint) AS result`;
-    return (rows[0] as any)?.result;
-  }, 'claim_bingo');
-}
-
-export async function callFinalizeGame(): Promise<any> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT finalize_game() AS result`;
+    const rows = await gameSql`SELECT finalize_game(${ids}::smallint[]) AS result`;
     return rows[0]?.result;
   }, 'finalize_game');
 }
@@ -100,17 +94,3 @@ export async function createNewPickingGame(): Promise<any> {
   }, 'create_new_picking_game');
 }
 
-// ── Dedicated caller connection (1 permanent connection) ──
-// Flat 400ms retry — fast constant retries, not exponential (game must not freeze)
-
-export async function updateCalledIndex(gameId: number, newIndex: number): Promise<void> {
-  await queryWithRetry(async () => {
-    await callerTickSql`UPDATE games SET called_index = ${newIndex} WHERE game_id = ${gameId}`;
-  }, 'update_called_index', 30, 400, true);
-}
-
-export async function setCallingStarted(gameId: number): Promise<void> {
-  await queryWithRetry(async () => {
-    await callerStartSql`UPDATE games SET calling_started = TRUE WHERE game_id = ${gameId}`;
-  }, 'set_calling_started', 30, 400, true);
-}

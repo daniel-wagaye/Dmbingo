@@ -95,4 +95,12 @@ export class GameRoom extends Room<{ state: GameState }> {
   public setPickingEndsAt(endsAtMs: number) {
     this.state.pickingEndsAt = endsAtMs;
   }
+
+  public getWinnerBoardIds(): number[] {
+    const ids: number[] = [];
+    this.state.picks.forEach((pick, key) => {
+      if (pick.winner) ids.push(Number(key));
+    });
+    return ids;
+  }
 }

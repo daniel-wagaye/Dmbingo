@@ -185,7 +185,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
       saveDabStorage(updated);
     }
 
-    // Auto-claim: check pattern for any board
+    // Auto-claim: check pattern locally first to avoid spamming server
     if (autoMode && !claimingRef.current && autoClaimSuppressedForIndex.current < ci) {
       let hasPattern = false;
       for (const bid of myBoardIds) {
@@ -280,7 +280,6 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
         if (data.action === 'no_bingo') {
           if (isAuto) {
             autoClaimSuppressedForIndex.current = gameState.calledIndex;
-            toast.error(t('no_bingo'));
           } else {
             toast.error(t('no_bingo'));
             await new Promise(r => setTimeout(r, NO_BINGO_SUPPRESS_MS));
