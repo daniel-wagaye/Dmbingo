@@ -93,13 +93,17 @@ export function leaveGameRoom(): void {
   joinGeneration++;
   joinPromise = null;
   const currentRoom = room;
-  room = null;
   if (currentRoom) {
-    try { currentRoom.leave(true); } catch { /* ignore */ }
-    try {
-      const ws = (currentRoom.connection as any)?.ws ?? (currentRoom as any).connection?.transport?.ws;
-      if (ws && typeof ws.close === 'function') ws.close();
-    } catch { /* ignore */ }
+    pendingLeaveTimeout = setTimeout(() => {
+      pendingLeaveTimeout = null;
+      if (room !== currentRoom) return;
+      room = null;
+      try { currentRoom.leave(true); } catch { /* ignore */ }
+      try {
+        const ws = (currentRoom.connection as any)?.ws ?? (currentRoom as any).connection?.transport?.ws;
+        if (ws && typeof ws.close === 'function') ws.close();
+      } catch { /* ignore */ }
+    }, 3000);
   }
 }
 
