@@ -18,6 +18,17 @@ let pendingLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let intentionalLeave = false;
 const JOIN_CANCELLED = 'JOIN_CANCELLED';
 
+function isRoomAlive(r: Room | null): boolean {
+  if (!r) return false;
+  try {
+    const ws = (r.connection as any)?.ws ?? (r as any).connection?.transport?.ws;
+    if (ws && typeof ws.readyState === 'number') {
+      return ws.readyState === WebSocket.OPEN;
+    }
+  } catch { /* ignore */ }
+  return true; // can't check — assume alive
+}
+
 function clearPendingLeaveTimeout(): void {
   if (pendingLeaveTimeout) {
     clearTimeout(pendingLeaveTimeout);
@@ -28,7 +39,13 @@ function clearPendingLeaveTimeout(): void {
 export async function joinGameRoom(): Promise<Room> {
   clearPendingLeaveTimeout();
   intentionalLeave = false;
-  if (room) return room;
+  if (room && isRoomAlive(room)) return room;
+  if (room && !isRoomAlive(room)) {
+    console.warn('[colyseus] Discarding zombie room (WebSocket not OPEN)');
+    try { room.leave(true); } catch { /* ignore */ }
+    room = null;
+    joinPromise = null;
+  }
   if (joinPromise) return joinPromise;
   const generation = ++joinGeneration;
 
@@ -76,13 +93,13 @@ export function leaveGameRoom(): void {
   joinGeneration++;
   joinPromise = null;
   const currentRoom = room;
+  room = null;
   if (currentRoom) {
-    pendingLeaveTimeout = setTimeout(() => {
-      pendingLeaveTimeout = null;
-      if (room !== currentRoom) return;
-      room = null;
-      currentRoom.leave();
-    }, 60000);
+    try { currentRoom.leave(true); } catch { /* ignore */ }
+    try {
+      const ws = (currentRoom.connection as any)?.ws ?? (currentRoom as any).connection?.transport?.ws;
+      if (ws && typeof ws.close === 'function') ws.close();
+    } catch { /* ignore */ }
   }
 }
 
@@ -99,6 +116,11 @@ export function forceLeaveGameRoom(): void {
   room = null;
   if (currentRoom) {
     try { currentRoom.leave(true); } catch { /* ignore */ }
+    // Force-close the raw WebSocket in case leave() didn't work (zombie)
+    try {
+      const ws = (currentRoom.connection as any)?.ws ?? (currentRoom as any).connection?.transport?.ws;
+      if (ws && typeof ws.close === 'function') ws.close();
+    } catch { /* ignore */ }
   }
 }
 

@@ -16,8 +16,17 @@ export class GameRoom extends Room<{ state: GameState }> {
     console.log(`[GameRoom] Client joined: ${client.sessionId}. State: phase=${this.state.phase}, stake=${this.state.stakeAmount}, pickingEndsAt=${this.state.pickingEndsAt}`);
   }
 
-  onLeave(client: any) {
-    console.log(`[GameRoom] Client left: ${client.sessionId}`);
+  async onLeave(client: any, code?: number) {
+    console.log(`[GameRoom] Client left: ${client.sessionId} (code=${code})`);
+    const consented = code === 1000 || (code !== undefined && code >= 4000);
+    if (!consented) {
+      try {
+        await this.allowReconnection(client, 30);
+        console.log(`[GameRoom] Client reconnected: ${client.sessionId}`);
+      } catch {
+        console.log(`[GameRoom] Reconnection expired: ${client.sessionId}`);
+      }
+    }
   }
 
   public setNewGame(gameData: {

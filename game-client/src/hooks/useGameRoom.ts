@@ -38,7 +38,6 @@ export function useGameRoom(): UseGameRoomReturn {
   const roomRef = useRef<any>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectingRef = useRef(false);
-  const connectedRef = useRef(false);
   const subscribedRoomRef = useRef<any>(null);
   const suppressLeaveCountRef = useRef(0);
 
@@ -48,10 +47,6 @@ export function useGameRoom(): UseGameRoomReturn {
       reconnectTimerRef.current = null;
     }
   }, []);
-
-  useEffect(() => {
-    connectedRef.current = connected;
-  }, [connected]);
 
   const doConnect = useCallback(async (options?: { force?: boolean }) => {
     if (!mountedRef.current) return;
@@ -126,18 +121,15 @@ export function useGameRoom(): UseGameRoomReturn {
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        doConnect();
+        console.log('[useGameRoom] Visibility restored. Force reconnecting...');
+        doConnect({ force: true });
       }
     };
 
     const handleOnline = () => {
       if (mountedRef.current) {
-        console.log('[useGameRoom] Network online. Reconnecting...');
-        if (connectedRef.current) {
-          doConnect();
-        } else {
-          doConnect({ force: true });
-        }
+        console.log('[useGameRoom] Network online. Force reconnecting...');
+        doConnect({ force: true });
       }
     };
 
