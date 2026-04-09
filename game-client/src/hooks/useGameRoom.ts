@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { joinGameRoom, leaveGameRoom, forceLeaveGameRoom } from '../services/colyseusClient';
+import { joinGameRoom, leaveGameRoom, forceLeaveGameRoom, isRoomAlive } from '../services/colyseusClient';
 
 export interface PlayerPick {
   telegramId: number;
@@ -40,6 +40,7 @@ export function useGameRoom(): UseGameRoomReturn {
   const connectingRef = useRef(false);
   const subscribedRoomRef = useRef<any>(null);
   const suppressLeaveCountRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -52,6 +53,12 @@ export function useGameRoom(): UseGameRoomReturn {
     if (!mountedRef.current) return;
     if (connectingRef.current) return;
     if (!options?.force && roomRef.current) return;
+
+    // If force requested but current room is alive and healthy, skip
+    if (options?.force && roomRef.current && isRoomAlive(roomRef.current)) {
+      console.log('[useGameRoom] Room is alive, skipping force reconnect.');
+      return;
+    }
 
     connectingRef.current = true;
     clearReconnectTimer();
@@ -91,6 +98,11 @@ export function useGameRoom(): UseGameRoomReturn {
             suppressLeaveCountRef.current -= 1;
             return;
           }
+          // Code 4000 = intentional leave (from leave(true)) — do not reconnect
+          if (code === 4000) {
+            console.log('[useGameRoom] Intentional leave (4000), no reconnect.');
+            return;
+          }
           console.log(`[useGameRoom] Room left unexpectedly (code ${code}). Auto-reconnecting in 2s...`);
           setConnected(false);
           roomRef.current = null;
@@ -119,17 +131,25 @@ export function useGameRoom(): UseGameRoomReturn {
     mountedRef.current = true;
     doConnect();
 
+    const debouncedForceConnect = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        if (mountedRef.current) doConnect({ force: true });
+      }, 500);
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        console.log('[useGameRoom] Visibility restored. Force reconnecting...');
-        doConnect({ force: true });
+        console.log('[useGameRoom] Visibility restored. Reconnecting (debounced)...');
+        debouncedForceConnect();
       }
     };
 
     const handleOnline = () => {
       if (mountedRef.current) {
-        console.log('[useGameRoom] Network online. Force reconnecting...');
-        doConnect({ force: true });
+        console.log('[useGameRoom] Network online. Reconnecting (debounced)...');
+        debouncedForceConnect();
       }
     };
 
@@ -139,6 +159,7 @@ export function useGameRoom(): UseGameRoomReturn {
     return () => {
       mountedRef.current = false;
       clearReconnectTimer();
+      if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('online', handleOnline);
       subscribedRoomRef.current = null;

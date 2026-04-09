@@ -18,7 +18,7 @@ let pendingLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
 let intentionalLeave = false;
 const JOIN_CANCELLED = 'JOIN_CANCELLED';
 
-function isRoomAlive(r: Room | null): boolean {
+export function isRoomAlive(r: Room | null): boolean {
   if (!r) return false;
   try {
     const ws = (r.connection as any)?.ws ?? (r as any).connection?.transport?.ws;
