@@ -42,7 +42,6 @@ export async function joinGameRoom(): Promise<Room> {
   if (room && isRoomAlive(room)) return room;
   if (room && !isRoomAlive(room)) {
     console.warn('[colyseus] Discarding zombie room (WebSocket not OPEN)');
-    try { room.leave(true); } catch { /* ignore */ }
     room = null;
     joinPromise = null;
   }
@@ -98,12 +97,8 @@ export function leaveGameRoom(): void {
       pendingLeaveTimeout = null;
       if (room !== currentRoom) return;
       room = null;
-      try { currentRoom.leave(true); } catch { /* ignore */ }
-      try {
-        const ws = (currentRoom.connection as any)?.ws ?? (currentRoom as any).connection?.transport?.ws;
-        if (ws && typeof ws.close === 'function') ws.close();
-      } catch { /* ignore */ }
-    }, 3000);
+      try { currentRoom.leave(); } catch { /* ignore */ }
+    }, 2000);
   }
 }
 

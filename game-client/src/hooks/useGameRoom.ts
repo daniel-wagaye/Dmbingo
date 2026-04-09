@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { joinGameRoom, leaveGameRoom, forceLeaveGameRoom, isRoomAlive } from '../services/colyseusClient';
+import { joinGameRoom, leaveGameRoom, isRoomAlive } from '../services/colyseusClient';
 
 export interface PlayerPick {
   telegramId: number;
@@ -39,7 +39,6 @@ export function useGameRoom(): UseGameRoomReturn {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectingRef = useRef(false);
   const subscribedRoomRef = useRef<any>(null);
-  const suppressLeaveCountRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearReconnectTimer = useCallback(() => {
@@ -49,29 +48,25 @@ export function useGameRoom(): UseGameRoomReturn {
     }
   }, []);
 
-  const doConnect = useCallback(async (options?: { force?: boolean }) => {
+  const doConnect = useCallback(async () => {
     if (!mountedRef.current) return;
     if (connectingRef.current) return;
-    if (!options?.force && roomRef.current) return;
 
-    // If force requested but current room is alive and healthy, skip
-    if (options?.force && roomRef.current && isRoomAlive(roomRef.current)) {
-      console.log('[useGameRoom] Room is alive, skipping force reconnect.');
-      return;
+    // If room exists and is alive, nothing to do
+    if (roomRef.current && isRoomAlive(roomRef.current)) return;
+
+    // If room exists but is dead, discard the reference (no leave — it's already dead)
+    if (roomRef.current && !isRoomAlive(roomRef.current)) {
+      console.warn('[useGameRoom] Room is dead, discarding reference.');
+      roomRef.current = null;
+      subscribedRoomRef.current = null;
+      setConnected(false);
     }
 
     connectingRef.current = true;
     clearReconnectTimer();
 
     try {
-      if (options?.force && roomRef.current) {
-        suppressLeaveCountRef.current += 1;
-        forceLeaveGameRoom();
-        roomRef.current = null;
-        subscribedRoomRef.current = null;
-        setConnected(false);
-      }
-
       const room = await joinGameRoom();
       if (!mountedRef.current) return;
 
@@ -94,13 +89,9 @@ export function useGameRoom(): UseGameRoomReturn {
 
         room.onLeave((code: number) => {
           if (!mountedRef.current) return;
-          if (suppressLeaveCountRef.current > 0) {
-            suppressLeaveCountRef.current -= 1;
-            return;
-          }
-          // Code 4000 = intentional leave (from leave(true)) — do not reconnect
-          if (code === 4000) {
-            console.log('[useGameRoom] Intentional leave (4000), no reconnect.');
+          // Intentional leaves (1000 = clean close, 4000 = consented) — do not reconnect
+          if (code === 1000 || code === 4000) {
+            console.log(`[useGameRoom] Intentional leave (code ${code}), no reconnect.`);
             return;
           }
           console.log(`[useGameRoom] Room left unexpectedly (code ${code}). Auto-reconnecting in 2s...`);
@@ -131,25 +122,25 @@ export function useGameRoom(): UseGameRoomReturn {
     mountedRef.current = true;
     doConnect();
 
-    const debouncedForceConnect = () => {
+    const debouncedConnect = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         debounceRef.current = null;
-        if (mountedRef.current) doConnect({ force: true });
+        if (mountedRef.current) doConnect();
       }, 500);
     };
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        console.log('[useGameRoom] Visibility restored. Reconnecting (debounced)...');
-        debouncedForceConnect();
+        console.log('[useGameRoom] Visibility restored. Checking room health...');
+        debouncedConnect();
       }
     };
 
     const handleOnline = () => {
       if (mountedRef.current) {
-        console.log('[useGameRoom] Network online. Reconnecting (debounced)...');
-        debouncedForceConnect();
+        console.log('[useGameRoom] Network online. Checking room health...');
+        debouncedConnect();
       }
     };
 
