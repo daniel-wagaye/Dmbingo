@@ -70,14 +70,21 @@ function setMarkedNums(storage: DabStorage, boardId: number, nums: Set<number>):
 export default function GameStarted({ telegramId, timeSync }: GameStartedProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { gameState, picks, loading } = useGameRoom();
+  const { gameState, picks, loading, reconnect } = useGameRoom();
   const [claiming, setClaiming] = useState(false);
   const [showReveal, setShowReveal] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [dabStorage, setDabStorage] = useState<DabStorage>({ gameId: 0, boards: {} });
   const claimingRef = useRef(false);
   const prevCalledIndexRef = useRef(0);
   const calledNumbersSnapshot = useRef<number[]>([]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await reconnect(); } finally { setRefreshing(false); }
+  }, [reconnect, refreshing]);
 
   // Find ALL my board picks (up to 2)
   const myPicks = useMemo(() => {
@@ -420,6 +427,14 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
           {isWinner && (
             <button className="bingo-btn bingo-winner" disabled>{t('winner')}</button>
           )}
+          <button
+            className="refresh-btn"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Refresh"
+          >
+            {refreshing ? <span className="spinner-sm" /> : '↻'}
+          </button>
         </div>
 
         <div className="started-right">

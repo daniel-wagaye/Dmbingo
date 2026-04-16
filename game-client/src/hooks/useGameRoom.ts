@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { joinGameRoom, leaveGameRoom, isRoomAlive } from '../services/colyseusClient';
+import { joinGameRoom, leaveGameRoom, forceLeaveGameRoom, isRoomAlive } from '../services/colyseusClient';
 
 export interface PlayerPick {
   telegramId: number;
@@ -28,6 +28,7 @@ interface UseGameRoomReturn {
   picks: Map<string, PlayerPick>;
   loading: boolean;
   connected: boolean;
+  reconnect: () => Promise<void>;
 }
 
 export function useGameRoom(): UseGameRoomReturn {
@@ -159,7 +160,18 @@ export function useGameRoom(): UseGameRoomReturn {
     };
   }, [doConnect, clearReconnectTimer]);
 
-  return { gameState, picks, loading, connected };
+  const reconnect = useCallback(async () => {
+    if (!mountedRef.current || connectingRef.current) return;
+    console.log('[useGameRoom] Manual reconnect requested.');
+    forceLeaveGameRoom();
+    roomRef.current = null;
+    subscribedRoomRef.current = null;
+    setConnected(false);
+    connectingRef.current = false;
+    await doConnect();
+  }, [doConnect]);
+
+  return { gameState, picks, loading, connected, reconnect };
 }
 
 function extractState(s: any): GameRoomState {

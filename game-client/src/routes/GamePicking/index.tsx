@@ -22,7 +22,14 @@ interface GamePickingProps {
 export default function GamePicking({ telegramId, timeSync, user, onRefreshUser }: GamePickingProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { gameState, picks } = useGameRoom();
+  const { gameState, picks, reconnect } = useGameRoom();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await reconnect(); } finally { setRefreshing(false); }
+  }, [reconnect, refreshing]);
 
   const [pendingBoardId, setPendingBoardId] = useState<number | null>(null);
   const lastPickTime = useRef(0);
@@ -169,6 +176,14 @@ export default function GamePicking({ telegramId, timeSync, user, onRefreshUser 
           <span className="stat-label">{t('countdown')}</span>
           <span className="stat-value countdown-value">{countdown}</span>
         </div>
+        <button
+          className="refresh-btn"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Refresh"
+        >
+          {refreshing ? <span className="spinner-sm" /> : '↻'}
+        </button>
         <div className="stat-box">
           <span className="stat-label">{t('wallet')}</span>
           <span className="stat-value">{localWallet.toFixed(2)}</span>
