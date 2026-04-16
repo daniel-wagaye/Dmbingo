@@ -126,8 +126,6 @@ export const listTransferHistory = async (req: Request, res: Response) => {
 
   const data = dataResult.rows.map((row) => ({
     ...row,
-    sender_phone: maskPhone(row.sender_phone as string | null),
-    receiver_phone: maskPhone(row.receiver_phone as string | null),
     total_amount: String(
       Number(row.amount ?? 0) + Number(row.commission ?? 0)
     ),
@@ -370,6 +368,121 @@ export const exportAdminCreditHistoryCsv = async (req: Request, res: Response) =
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="admin_credit_history.csv"');
+  return res.send(csv);
+};
+
+export const listWinnerHistory = async (req: Request, res: Response) => {
+  const admin = ensureSuperAdmin(req, res);
+  if (!admin) return;
+
+  const page = Math.max(Number.parseInt((req.query.page as string) ?? '1', 10), 1);
+  const offset = (page - 1) * PAGE_SIZE;
+  const search = (req.query.search as string | undefined)?.trim();
+  const range = parseDateRange(req.query.startDate as string | undefined, req.query.endDate as string | undefined);
+  if (range && 'error' in range) {
+    return res.status(400).json({ error: range.error });
+  }
+
+  const clauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(
+      `(CAST(wh.game_id AS TEXT) ILIKE $${params.length} OR CAST(wh.telegram_id AS TEXT) ILIKE $${params.length} OR CAST(wh.board_id AS TEXT) ILIKE $${params.length} OR CAST(wh.credited_amount AS TEXT) ILIKE $${params.length})`
+    );
+  }
+  if (range && 'start' in range) {
+    params.push(range.start);
+    clauses.push(`wh.won_at >= $${params.length}`);
+    params.push(range.end);
+    clauses.push(`wh.won_at <= $${params.length}`);
+  }
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM winners_history wh ${whereClause}`,
+    params
+  );
+  const total = Number(countResult.rows[0]?.total ?? 0);
+  const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+
+  params.push(PAGE_SIZE, offset);
+  const dataResult = await pool.query(
+    `
+      SELECT
+        wh.id,
+        wh.game_id,
+        wh.telegram_id,
+        u.first_name,
+        wh.board_id,
+        wh.credited_amount,
+        wh.won_at
+      FROM winners_history wh
+      LEFT JOIN users u ON u.telegram_id = wh.telegram_id
+      ${whereClause}
+      ORDER BY wh.won_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `,
+    params
+  );
+
+  return res.json({
+    data: dataResult.rows,
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages,
+  });
+};
+
+export const exportWinnerHistoryCsv = async (req: Request, res: Response) => {
+  const admin = ensureSuperAdmin(req, res);
+  if (!admin) return;
+
+  const search = (req.query.search as string | undefined)?.trim();
+  const range = parseDateRange(req.query.startDate as string | undefined, req.query.endDate as string | undefined);
+  if (!range || 'error' in range) {
+    return res.status(400).json({ error: range ? range.error : 'missing_date_range' });
+  }
+
+  const clauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(
+      `(CAST(wh.game_id AS TEXT) ILIKE $${params.length} OR CAST(wh.telegram_id AS TEXT) ILIKE $${params.length} OR CAST(wh.board_id AS TEXT) ILIKE $${params.length})`
+    );
+  }
+  params.push(range.start);
+  clauses.push(`wh.won_at >= $${params.length}`);
+  params.push(range.end);
+  clauses.push(`wh.won_at <= $${params.length}`);
+
+  const whereClause = `WHERE ${clauses.join(' AND ')}`;
+
+  const dataResult = await pool.query(
+    `
+      SELECT wh.id, wh.game_id, wh.telegram_id, u.first_name, wh.board_id, wh.credited_amount, wh.won_at
+      FROM winners_history wh
+      LEFT JOIN users u ON u.telegram_id = wh.telegram_id
+      ${whereClause}
+      ORDER BY wh.won_at DESC
+    `,
+    params
+  );
+
+  const header = ['id', 'game_id', 'telegram_id', 'first_name', 'board_id', 'credited_amount', 'won_at'];
+  const rows = dataResult.rows.map((row) => [
+    row.id, row.game_id, row.telegram_id, row.first_name, row.board_id, row.credited_amount, row.won_at,
+  ]);
+
+  const csv = [header, ...rows].map((line) => line.map(toCsvValue).join(',')).join('\n');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="winners_history.csv"');
   return res.send(csv);
 };
 

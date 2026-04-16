@@ -51,18 +51,45 @@ export const listWithdrawals = async (req: Request, res: Response) => {
   const page = Math.max(Number.parseInt((req.query.page as string) ?? '1', 10), 1);
   const statusParam = (req.query.status as string | undefined)?.toLowerCase();
   const isPending = statusParam === 'pending';
-  const whereClause = isPending
-    ? `WHERE w.status = 'pending'`
-    : `WHERE w.status IN ('approved', 'declined')`;
+  const search = (req.query.search as string | undefined)?.trim();
+  const startDate = (req.query.startDate as string | undefined)?.trim();
+  const endDate = (req.query.endDate as string | undefined)?.trim();
 
+  const clauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+
+  if (isPending) {
+    clauses.push(`w.status = 'pending'`);
+  } else {
+    clauses.push(`w.status IN ('approved', 'declined')`);
+  }
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(
+      `(CAST(w.telegram_id AS TEXT) ILIKE $${params.length} OR CAST(w.amount AS TEXT) ILIKE $${params.length} OR w.bank ILIKE $${params.length} OR w.account_num ILIKE $${params.length} OR u.first_name ILIKE $${params.length})`
+    );
+  }
+  if (startDate) {
+    params.push(new Date(startDate));
+    clauses.push(`w.created_at >= $${params.length}`);
+  }
+  if (endDate) {
+    params.push(new Date(endDate));
+    clauses.push(`w.created_at <= $${params.length}`);
+  }
+
+  const whereClause = `WHERE ${clauses.join(' AND ')}`;
   const offset = (page - 1) * PAGE_SIZE;
 
   const countResult = await queryWithRetry(
-    `SELECT COUNT(*)::int AS total FROM withdrawals_request w ${whereClause}`
+    `SELECT COUNT(*)::int AS total FROM withdrawals_request w LEFT JOIN users u ON u.telegram_id = w.telegram_id ${whereClause}`,
+    params
   );
   const total = Number(countResult.rows[0]?.total ?? 0);
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
 
+  params.push(PAGE_SIZE, offset);
   const dataResult = await queryWithRetry(
     `
       SELECT
@@ -120,9 +147,9 @@ export const listWithdrawals = async (req: Request, res: Response) => {
       LEFT JOIN users u ON u.telegram_id = w.telegram_id
       ${whereClause}
       ORDER BY w.created_at DESC
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `,
-    [PAGE_SIZE, offset]
+    params
   );
 
   return res.json({

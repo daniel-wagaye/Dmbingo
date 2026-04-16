@@ -136,6 +136,41 @@ export const exportAdminCreditHistory = async (params: {
   return response.blob();
 };
 
+export type WinnerHistoryRow = {
+  id: number;
+  game_id: number | null;
+  telegram_id: number | null;
+  first_name: string | null;
+  board_id: number | null;
+  credited_amount: string | null;
+  won_at: string;
+};
+
+export const fetchWinnerHistory = async (params: {
+  page?: number;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}) =>
+  request<HistoryResponse<WinnerHistoryRow>>(`/admin/winners${buildQuery(params)}`, {
+    method: 'GET',
+  });
+
+export const exportWinnerHistory = async (params: {
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const response = await fetch(`${API_BASE}/admin/winners/export${buildQuery(params)}`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error('Export failed');
+  }
+  return response.blob();
+};
+
 export const fetchAdminActions = async (params: {
   page?: number;
   search?: string;

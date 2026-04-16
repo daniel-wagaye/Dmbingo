@@ -9,11 +9,43 @@ const PAGE_SIZE = 200;
 export const listDeposits = async (req: Request, res: Response) => {
   const page = Math.max(Number.parseInt((req.query.page as string) ?? '1', 10), 1);
   const offset = (page - 1) * PAGE_SIZE;
+  const search = (req.query.search as string | undefined)?.trim();
+  const status = (req.query.status as string | undefined)?.trim();
+  const startDate = (req.query.startDate as string | undefined)?.trim();
+  const endDate = (req.query.endDate as string | undefined)?.trim();
 
-  const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM deposits`);
+  const clauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(
+      `(CAST(d.telegram_id AS TEXT) ILIKE $${params.length} OR CAST(d.amount AS TEXT) ILIKE $${params.length} OR d.txn_reference ILIKE $${params.length})`
+    );
+  }
+  if (status) {
+    params.push(status);
+    clauses.push(`d.status = $${params.length}`);
+  }
+  if (startDate) {
+    params.push(new Date(startDate));
+    clauses.push(`d.created_at >= $${params.length}`);
+  }
+  if (endDate) {
+    params.push(new Date(endDate));
+    clauses.push(`d.created_at <= $${params.length}`);
+  }
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM deposits d ${whereClause}`,
+    params
+  );
   const total = Number(countResult.rows[0]?.total ?? 0);
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
 
+  params.push(PAGE_SIZE, offset);
   const dataResult = await pool.query(
     `
       SELECT
@@ -28,10 +60,11 @@ export const listDeposits = async (req: Request, res: Response) => {
         d.processed_at
       FROM deposits d
       LEFT JOIN users u ON u.telegram_id = d.telegram_id
+      ${whereClause}
       ORDER BY d.created_at DESC
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `,
-    [PAGE_SIZE, offset]
+    params
   );
 
   return res.json({

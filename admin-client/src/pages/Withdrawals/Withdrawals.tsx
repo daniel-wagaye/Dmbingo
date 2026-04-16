@@ -58,6 +58,9 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedDeclineId, setExpandedDeclineId] = useState<number | null>(null);
   const declineReasonRef = useRef<HTMLTableCellElement | null>(null);
+  const [search, setSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const columns = useMemo(
     () =>
@@ -79,7 +82,13 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const loadWithdrawals = async (nextPage = page) => {
     setLoading(true);
     try {
-      const data = await fetchWithdrawals({ page: nextPage, status: mode });
+      const data = await fetchWithdrawals({
+        page: nextPage,
+        status: mode,
+        search: search.trim() || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
       setRows(data.data);
       setPage(data.page);
       setTotalPages(data.totalPages);
@@ -229,6 +238,30 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
             Approved
           </a>
         </div>
+      </div>
+
+      <div className="coupons-controls">
+        <input
+          type="text"
+          className="coupons-input"
+          placeholder="Search Telegram ID, amount, bank, account, or name"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') loadWithdrawals(1); }}
+        />
+        <div className="coupons-date">
+          <label>
+            From
+            <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+        </div>
+        <button type="button" className="secondary-button" onClick={() => loadWithdrawals(1)} disabled={loading}>
+          Apply Filters
+        </button>
       </div>
 
       <div className="withdrawals-table-wrapper">

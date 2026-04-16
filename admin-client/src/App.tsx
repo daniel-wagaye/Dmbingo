@@ -15,6 +15,7 @@ import ReferralHistory from './pages/ReferralHistory/ReferralHistory';
 import ReportPage from './pages/ReportPage/ReportPage';
 import TransferHistory from './pages/TransferHistory/TransferHistory';
 import Users from './pages/Users/Users';
+import Winners from './pages/Winners/Winners';
 import Withdrawals from './pages/Withdrawals/Withdrawals';
 import {
   forgotResendOtp,
@@ -53,6 +54,7 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
       enabled: role === 'super_admin',
     },
     { key: 'coupons', label: 'Coupons', href: '/admin/coupons', enabled: role === 'super_admin' },
+    { key: 'winners', label: 'Winners', href: '/admin/winners', enabled: role === 'super_admin' },
     { key: 'reports', label: 'Reports', href: '/admin/reports', enabled: role === 'super_admin' },
     {
       key: 'admin-management',
@@ -132,6 +134,7 @@ const App = () => {
   const isTransferHistoryRoute = pathname.startsWith('/admin/transfers');
   const isReferralHistoryRoute = pathname.startsWith('/admin/referrals');
   const isAdminCreditHistoryRoute = pathname.startsWith('/admin/admin-credits');
+  const isWinnersRoute = pathname.startsWith('/admin/winners');
   const isReportsRoute = pathname.startsWith('/admin/reports');
   const isAdminManagementRoute = pathname.startsWith('/admin/admin-management');
 
@@ -518,6 +521,26 @@ const App = () => {
           ) : (
             <AdminCreditHistory />
           )}
+        </AdminLayout>
+      );
+    }
+
+    if (isWinnersRoute) {
+      if (role !== 'super_admin') {
+        return (
+          <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
+            <Toaster position="top-right" />
+            <div className="page-placeholder">
+              <h2>Access denied</h2>
+              <p>Super Admin access only.</p>
+            </div>
+          </AdminLayout>
+        );
+      }
+      return (
+        <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
+          <Toaster position="top-right" />
+          <Winners />
         </AdminLayout>
       );
     }

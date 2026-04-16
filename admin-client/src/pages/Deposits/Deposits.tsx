@@ -35,11 +35,21 @@ const Deposits = () => {
   const [createAmount, setCreateAmount] = useState('');
   const [createTxn, setCreateTxn] = useState('');
   const [createPassword, setCreatePassword] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const loadDeposits = async (nextPage = page) => {
     setLoading(true);
     try {
-      const data = await fetchDeposits({ page: nextPage });
+      const data = await fetchDeposits({
+        page: nextPage,
+        search: search.trim() || undefined,
+        status: statusFilter || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
       setRows(data.data);
       setPage(data.page);
       setTotalPages(data.totalPages);
@@ -181,6 +191,41 @@ const Deposits = () => {
         </div>
         <button type="button" className="primary-button" onClick={() => setCreateOpen(true)}>
           Create Deposit
+        </button>
+      </div>
+
+      <div className="coupons-controls">
+        <input
+          type="text"
+          className="coupons-input"
+          placeholder="Search Telegram ID, amount, or txn reference"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') loadDeposits(1); }}
+        />
+        <div className="coupons-date">
+          <label>
+            From
+            <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+        </div>
+        <div className="coupons-sort">
+          <label>
+            Status
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" className="secondary-button" onClick={() => loadDeposits(1)} disabled={loading}>
+          Apply Filters
         </button>
       </div>
 

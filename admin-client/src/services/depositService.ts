@@ -39,9 +39,19 @@ const request = async <T>(path: string, options: RequestInit) => {
   return data;
 };
 
-export const fetchDeposits = async (params: { page?: number }) => {
+export const fetchDeposits = async (params: {
+  page?: number;
+  search?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
   const query = new URLSearchParams();
   if (params.page) query.set('page', String(params.page));
+  if (params.search) query.set('search', params.search);
+  if (params.status) query.set('status', params.status);
+  if (params.startDate) query.set('startDate', params.startDate);
+  if (params.endDate) query.set('endDate', params.endDate);
   const queryString = query.toString();
   return request<DepositsResponse>(`/admin/deposits${queryString ? `?${queryString}` : ''}`, {
     method: 'GET',

@@ -41,10 +41,19 @@ const request = async <T>(path: string, options: RequestInit) => {
   return data;
 };
 
-export const fetchWithdrawals = async (params: { page?: number; status?: 'pending' | 'history' }) => {
+export const fetchWithdrawals = async (params: {
+  page?: number;
+  status?: 'pending' | 'history';
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
   const query = new URLSearchParams();
   if (params.page) query.set('page', String(params.page));
   if (params.status) query.set('status', params.status === 'pending' ? 'pending' : 'history');
+  if (params.search) query.set('search', params.search);
+  if (params.startDate) query.set('startDate', params.startDate);
+  if (params.endDate) query.set('endDate', params.endDate);
   const queryString = query.toString();
   return request<WithdrawalsResponse>(
     `/admin/withdrawals${queryString ? `?${queryString}` : ''}`,
