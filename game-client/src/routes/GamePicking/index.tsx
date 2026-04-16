@@ -180,9 +180,9 @@ export default function GamePicking({ telegramId, timeSync, user, onRefreshUser 
           className="refresh-btn"
           onClick={handleRefresh}
           disabled={refreshing}
-          title="Refresh"
+          title={t('refresh')}
         >
-          {refreshing ? <span className="spinner-sm" /> : '↻'}
+          {refreshing ? <span className="spinner-sm" /> : <><span className="refresh-icon">↻</span> {t('refresh')}</>}
         </button>
         <div className="stat-box">
           <span className="stat-label">{t('wallet')}</span>

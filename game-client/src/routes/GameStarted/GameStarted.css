@@ -654,18 +654,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  gap: 4px;
+  padding: 6px 12px;
   height: 36px;
   border: none;
   border-radius: 10px;
   background: #e67e22;
   color: #fff;
-  font-size: 18px;
-  font-weight: 700;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
   align-self: center;
   margin: 6px auto 0;
+  white-space: nowrap;
+}
+.refresh-icon {
+  font-size: 16px;
+  font-weight: 700;
 }
 .refresh-btn:disabled {
   opacity: 0.5;

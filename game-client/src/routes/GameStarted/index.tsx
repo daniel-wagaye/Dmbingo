@@ -431,9 +431,8 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
             className="refresh-btn"
             onClick={handleRefresh}
             disabled={refreshing}
-            title="Refresh"
           >
-            {refreshing ? <span className="spinner-sm" /> : '↻'}
+            {refreshing ? <span className="spinner-sm" /> : <><span className="refresh-icon">↻</span> {t('refresh')}</>}
           </button>
         </div>
 
