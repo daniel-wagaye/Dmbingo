@@ -5,6 +5,7 @@ export interface PlayerPick {
   telegramId: number;
   winner: boolean;
   winnerName: string;
+  auto: boolean;
 }
 
 export interface GameRoomState {
@@ -187,6 +188,7 @@ function extractPicks(picksMap: any): Map<string, PlayerPick> {
         telegramId: pick.telegramId ?? 0,
         winner: !!pick.winner,
         winnerName: pick.winnerName ?? '',
+        auto: pick.auto !== undefined ? !!pick.auto : true,
       });
     });
   }

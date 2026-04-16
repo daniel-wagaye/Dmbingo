@@ -29,7 +29,7 @@ app.use(cors({
   origin: config.clientUrl,
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-Telegram-Init-Data', 'X-Telegram-Contact-Raw', 'X-Game-Secret'],
+  allowedHeaders: ['Content-Type', 'X-Telegram-Init-Data', 'X-Telegram-Contact-Raw', 'X-Game-Secret', 'X-Auto-Bingo'],
 }));
 
 // ── Body parsing with size limit ──

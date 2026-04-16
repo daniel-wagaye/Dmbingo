@@ -35,6 +35,8 @@ export const config = {
   historyRateLimitMax: parseInt(process.env.HISTORY_RATE_LIMIT_MAX || '10', 10),
   couponRateLimitWindowMs: parseInt(process.env.COUPON_RATE_LIMIT_WINDOW_MS || '60000', 10),
   couponRateLimitMax: parseInt(process.env.COUPON_RATE_LIMIT_MAX || '3', 10),
+  autoToggleRateLimitWindowMs: parseInt(process.env.AUTO_TOGGLE_RATE_LIMIT_WINDOW_MS || '60000', 10),
+  autoToggleRateLimitMax: parseInt(process.env.AUTO_TOGGLE_RATE_LIMIT_MAX || '5', 10),
   depositRateLimitWindowMs: parseInt(process.env.DEPOSIT_RATE_LIMIT_WINDOW_MS || '60000', 10),
   depositRateLimitMax: parseInt(process.env.DEPOSIT_RATE_LIMIT_MAX || '3', 10),
   transferRateLimitWindowMs: parseInt(process.env.TRANSFER_RATE_LIMIT_WINDOW_MS || '60000', 10),

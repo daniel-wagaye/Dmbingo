@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { TimeSync } from '../../hooks/useAuth';
 import { useGameRoom, PlayerPick } from '../../hooks/useGameRoom';
-import { hasBingoPattern } from '../../utils/bingoPatterns';
 import BINGO_CARDS from '../../data/bingoCards.json';
 import WinnerRevealModal from './WinnerRevealModal';
 import './GameStarted.css';
@@ -17,8 +16,8 @@ interface GameStartedProps {
 const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'];
 const COL_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#a855f7'];
 const BINGO_TIMEOUT_MS = 800;
-const AUTO_RETRY_DELAY_MS = 400;
 const NO_BINGO_SUPPRESS_MS = 1500;
+const AUTO_TOGGLE_TIMEOUT_MS = 5000;
 
 function getLetterForNumber(n: number): string {
   if (n >= 1 && n <= 15) return 'B';
@@ -74,12 +73,9 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
   const { gameState, picks, loading } = useGameRoom();
   const [claiming, setClaiming] = useState(false);
   const [showReveal, setShowReveal] = useState(false);
-  const [autoMode, setAutoMode] = useState(() => {
-    try { return localStorage.getItem('bingoAutoMode') !== 'off'; } catch { return true; }
-  });
+  const [toggling, setToggling] = useState(false);
   const [dabStorage, setDabStorage] = useState<DabStorage>({ gameId: 0, boards: {} });
   const claimingRef = useRef(false);
-  const autoClaimSuppressedForIndex = useRef(-1);
   const prevCalledIndexRef = useRef(0);
   const calledNumbersSnapshot = useRef<number[]>([]);
 
@@ -106,21 +102,21 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     return result;
   }, [picks]);
 
+  // Derive autoMode from Colyseus picks: if ANY of my picks has auto=false → OFF
+  const autoMode = useMemo(() => {
+    if (myPicks.length === 0) return true;
+    return myPicks.every(p => p.auto);
+  }, [myPicks]);
+
   // Load dab storage when gameId changes + reset refs for fresh reconnect
   useEffect(() => {
     const gid = gameState?.gameId ?? 0;
     if (gid > 0) {
       setDabStorage(loadDabStorage(gid));
       prevCalledIndexRef.current = 0;
-      autoClaimSuppressedForIndex.current = -1;
       calledNumbersSnapshot.current = [];
     }
   }, [gameState?.gameId]);
-
-  // Persist auto mode to localStorage
-  useEffect(() => {
-    localStorage.setItem('bingoAutoMode', autoMode ? 'on' : 'off');
-  }, [autoMode]);
 
   // Phase navigation
   useEffect(() => {
@@ -143,10 +139,9 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     if (gameState.phase !== 'winner_reveal' && gameState.phase !== 'started') setShowReveal(false);
   }, [gameState?.phase]);
 
-  // ── Auto-dab + auto-claim on new called number ──
+  // ── Auto-dab on new called number (visual only — backend handles auto-bingo) ──
   useEffect(() => {
-    if (!gameState || !gameState.callingStarted || isWinner) return;
-    // Stop auto-claim if game phase changed (winner_reveal, picking, maintenance)
+    if (!gameState || !gameState.callingStarted) return;
     if (gameState.phase !== 'started') return;
     const ci = gameState.calledIndex;
     if (ci <= prevCalledIndexRef.current) return;
@@ -158,7 +153,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
       calledNumbersSnapshot.current = shuffled.slice(0, ci);
     }
 
-    if (myBoardIds.length === 0) return;
+    if (myBoardIds.length === 0 || !autoMode) return;
     const calledNums = new Set(shuffled.slice(0, ci));
 
     let updated = dabStorage;
@@ -167,66 +162,76 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     for (const bid of myBoardIds) {
       const card = cards[String(bid)];
       if (!card) continue;
-
-      if (autoMode) {
-        // Auto-dab: mark only called numbers, remove uncalled manual dabs
-        const autoMarked = new Set<number>();
-        for (const row of card) {
-          for (const cell of row) {
-            if (calledNums.has(cell)) autoMarked.add(cell);
-          }
+      const autoMarked = new Set<number>();
+      for (const row of card) {
+        for (const cell of row) {
+          if (calledNums.has(cell)) autoMarked.add(cell);
         }
-        updated = setMarkedNums(updated, bid, autoMarked);
       }
+      updated = setMarkedNums(updated, bid, autoMarked);
     }
 
-    if (autoMode) {
-      setDabStorage(updated);
-      saveDabStorage(updated);
-    }
-
-    // Auto-claim: check pattern locally first to avoid spamming server
-    if (autoMode && !claimingRef.current && autoClaimSuppressedForIndex.current < ci) {
-      let hasPattern = false;
-      for (const bid of myBoardIds) {
-        const card = cards[String(bid)];
-        if (!card) continue;
-        const marked = getMarkedNums(updated, bid);
-        if (hasBingoPattern(card, marked)) { hasPattern = true; break; }
-      }
-      if (hasPattern) {
-        doClaimBingo(true);
-      }
-    }
+    setDabStorage(updated);
+    saveDabStorage(updated);
   }, [gameState?.calledIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Toggle auto mode: when turning ON, sync dabs to only called numbers
-  const handleToggleAuto = useCallback(() => {
-    setAutoMode(prev => {
-      const next = !prev;
-      if (next && gameState) {
-        // Re-sync: only keep called number dabs
-        const shuffled = gameState.shuffledNums || [];
-        const calledNums = new Set(shuffled.slice(0, gameState.calledIndex));
-        const cards = BINGO_CARDS as Record<string, number[][]>;
-        let updated = dabStorage;
-        for (const bid of myBoardIds) {
-          const card = cards[String(bid)];
-          if (!card) continue;
-          const autoMarked = new Set<number>();
-          for (const row of card) {
-            for (const cell of row) {
-              if (calledNums.has(cell)) autoMarked.add(cell);
-            }
-          }
-          updated = setMarkedNums(updated, bid, autoMarked);
+  // Toggle auto mode via REST endpoint
+  const handleToggleAuto = useCallback(async () => {
+    if (toggling) return;
+    const newValue = !autoMode;
+    setToggling(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), AUTO_TOGGLE_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(
+        `${(import.meta as any).env.VITE_API_URL || 'http://localhost:3000'}/api/games/0/toggle-auto`,
+        {
+          method: 'POST',
+          headers: {
+            'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || '',
+            'X-Auto-Bingo': newValue ? 'ON' : 'OFF',
+          },
+          signal: controller.signal,
         }
-        setDabStorage(updated);
-        saveDabStorage(updated);
+      );
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = await res.json();
+        // Re-sync dabs when turning ON
+        if (data.auto && gameState) {
+          const shuffled = gameState.shuffledNums || [];
+          const calledNums = new Set(shuffled.slice(0, gameState.calledIndex));
+          const cards = BINGO_CARDS as Record<string, number[][]>;
+          let updated = dabStorage;
+          for (const bid of myBoardIds) {
+            const card = cards[String(bid)];
+            if (!card) continue;
+            const autoMarked = new Set<number>();
+            for (const row of card) {
+              for (const cell of row) {
+                if (calledNums.has(cell)) autoMarked.add(cell);
+              }
+            }
+            updated = setMarkedNums(updated, bid, autoMarked);
+          }
+          setDabStorage(updated);
+          saveDabStorage(updated);
+        }
+      } else if (res.status === 429) {
+        toast.error(t('claim_rate_limit'));
       }
-      return next;
-    });
-  }, [gameState, dabStorage, myBoardIds]);
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        toast.error(t('bingo_timeout'));
+      }
+    } finally {
+      setToggling(false);
+    }
+  }, [autoMode, toggling, gameState, dabStorage, myBoardIds, t]);
 
   // Manual dab toggle (only when auto is OFF)
   const toggleMark = useCallback((boardId: number, num: number) => {
@@ -241,22 +246,20 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
     });
   }, [autoMode]);
 
-  // ── Bingo claim with timeout ──
-  const doClaimBingo = useCallback(async (isAuto: boolean) => {
+  // ── Manual bingo claim with timeout ──
+  const doClaimBingo = useCallback(async () => {
     if (!gameState || myBoardIds.length === 0 || claimingRef.current || isWinner) return;
-    // Don't claim if game is no longer in started phase
     if (gameState.phase !== 'started') return;
     if (gameState.calledIndex < 2) {
-      if (!isAuto) toast.error(t('please_wait'));
+      toast.error(t('please_wait'));
       return;
     }
 
     claimingRef.current = true;
     setClaiming(true);
 
-    const timeoutMs = BINGO_TIMEOUT_MS;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), BINGO_TIMEOUT_MS);
 
     try {
       const res = await fetch(
@@ -278,55 +281,24 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
       } else if (res.ok) {
         const data = await res.json();
         if (data.action === 'no_bingo') {
-          if (isAuto) {
-            autoClaimSuppressedForIndex.current = gameState.calledIndex;
-          } else {
-            toast.error(t('no_bingo'));
-            await new Promise(r => setTimeout(r, NO_BINGO_SUPPRESS_MS));
-          }
+          toast.error(t('no_bingo'));
+          await new Promise(r => setTimeout(r, NO_BINGO_SUPPRESS_MS));
         }
-        // winner result handled by Colyseus state change
       } else if (res.status === 429) {
         toast.error(t('claim_rate_limit'));
       }
     } catch (err: any) {
       clearTimeout(timer);
-      // Check offline FIRST — AbortError can also fire when offline
-      const offline = !navigator.onLine;
-      if (offline) {
-        if (isAuto) {
-          toast.error(t('no_internet_auto'));
-          setTimeout(() => {
-            claimingRef.current = false;
-            setClaiming(false);
-            if (gameState?.phase === 'started') doClaimBingo(true);
-          }, AUTO_RETRY_DELAY_MS);
-          return;
-        } else {
-          toast.error(t('no_internet'));
-        }
+      if (!navigator.onLine) {
+        toast.error(t('no_internet'));
       } else if (err.name === 'AbortError') {
-        if (isAuto) {
-          toast.error(t('bingo_timeout_auto'));
-          setTimeout(() => {
-            claimingRef.current = false;
-            setClaiming(false);
-            if (gameState?.phase === 'started') doClaimBingo(true);
-          }, AUTO_RETRY_DELAY_MS);
-          return;
-        } else {
-          toast.error(t('bingo_timeout'));
-        }
+        toast.error(t('bingo_timeout'));
       }
     } finally {
       claimingRef.current = false;
       setClaiming(false);
     }
   }, [gameState, myBoardIds, isWinner, t]);
-
-  const handleClaimBingo = useCallback(() => {
-    doClaimBingo(false);
-  }, [doClaimBingo]);
 
   if (loading || !gameState) {
     return (
@@ -439,7 +411,7 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
           {myBoardIds.length > 0 && !isWinner && (
             <button
               className="bingo-btn"
-              onClick={handleClaimBingo}
+              onClick={doClaimBingo}
               disabled={claiming || autoMode}
             >
               {claiming ? <span className="spinner-sm" /> : (autoMode ? t('automatic') : t('bingo'))}
@@ -485,9 +457,14 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
                 type="button"
                 className={`auto-toggle-btn ${autoMode ? 'auto-on' : 'auto-off'}`}
                 onClick={handleToggleAuto}
+                disabled={toggling}
               >
-                <span className="auto-toggle-thumb" />
-                <span className="auto-toggle-text">{autoMode ? 'ON' : 'OFF'}</span>
+                {toggling ? <span className="spinner-sm" /> : (
+                  <>
+                    <span className="auto-toggle-thumb" />
+                    <span className="auto-toggle-text">{autoMode ? 'ON' : 'OFF'}</span>
+                  </>
+                )}
               </button>
             </div>
           )}

@@ -5,6 +5,7 @@ import {
 } from '../services/gameService';
 import { schedulePickingTimer } from './scheduler';
 import { activeRoom } from '../colyseus/GameRoom';
+import { getBingoCard, hasBingoPattern } from '../services/bingoValidator';
 
 let callingInterval: ReturnType<typeof setInterval> | null = null;
 let activeGameId: number | null = null;
@@ -95,6 +96,39 @@ function scheduleRevealEnd(): void {
   }, config.winnerRevealDurationMs);
 }
 
+function checkAutoBingo(): void {
+  if (!activeRoom || winnerDetected) return;
+
+  const state = activeRoom.state;
+  const shuffled = state.shuffledNums;
+  const ci = state.calledIndex;
+  if (ci < 4) return; // minimum 4 numbers needed for four corners
+
+  const calledSet = new Set<number>();
+  for (let i = 0; i < ci && i < shuffled.length; i++) {
+    calledSet.add(shuffled[i]);
+  }
+
+  const autoBoards = activeRoom.getAutoBoards();
+  let foundWinner = false;
+
+  for (const { boardId, telegramId } of autoBoards) {
+    const card = getBingoCard(boardId);
+    if (!card) continue;
+
+    if (hasBingoPattern(card, calledSet)) {
+      const pick = state.picks.get(boardId.toString());
+      const winnerName = pick?.winnerName || '';
+      activeRoom.updatePick(boardId, telegramId, true, winnerName);
+      foundWinner = true;
+    }
+  }
+
+  if (foundWinner) {
+    onWinnerDetected();
+  }
+}
+
 export function startCallingLoop(gameId: number, _shuffledNums: number[]): void {
   stopCallingLoop();
 
@@ -126,6 +160,8 @@ export function startCallingLoop(gameId: number, _shuffledNums: number[]): void 
         if (activeRoom) {
           activeRoom.setCalledIndex(currentIndex);
         }
+
+        checkAutoBingo();
 
         currentIndex++;
         if (currentIndex > totalNums) {

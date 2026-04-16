@@ -4,6 +4,7 @@ export class PlayerPick extends Schema {
   @type('number') telegramId: number = 0;
   @type('boolean') winner: boolean = false;
   @type('string') winnerName: string = '';
+  @type('boolean') auto: boolean = true;
 }
 
 export class GameState extends Schema {

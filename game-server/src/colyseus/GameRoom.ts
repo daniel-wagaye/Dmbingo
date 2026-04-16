@@ -58,11 +58,30 @@ export class GameRoom extends Room<{ state: GameState }> {
     let pick = this.state.picks.get(key);
     if (!pick) {
       pick = new PlayerPick();
+      pick.auto = true;
       this.state.picks.set(key, pick);
     }
     pick.telegramId = telegramId;
     pick.winner = winner;
     pick.winnerName = winnerName;
+  }
+
+  public setAutoForPlayer(telegramId: number, value: boolean): void {
+    this.state.picks.forEach((pick) => {
+      if (Number(pick.telegramId) === telegramId) {
+        if (pick.auto !== value) pick.auto = value;
+      }
+    });
+  }
+
+  public getAutoBoards(): Array<{ boardId: number; telegramId: number }> {
+    const result: Array<{ boardId: number; telegramId: number }> = [];
+    this.state.picks.forEach((pick, key) => {
+      if (pick.auto && !pick.winner) {
+        result.push({ boardId: Number(key), telegramId: Number(pick.telegramId) });
+      }
+    });
+    return result;
   }
 
   public setCalledIndex(index: number) {

@@ -176,6 +176,37 @@ export async function claimBingo(req: Request, res: Response): Promise<void> {
   }
 }
 
+// ── POST /api/games/:gameId/toggle-auto ──
+export async function toggleAuto(req: Request, res: Response): Promise<void> {
+  try {
+    const telegramId = req.telegramUser!.telegram_id;
+    const autoBingoHeader = req.header('X-Auto-Bingo');
+
+    if (autoBingoHeader !== 'ON' && autoBingoHeader !== 'OFF') {
+      res.status(400).json({ error: 'INVALID_VALUE', message: 'X-Auto-Bingo header must be ON or OFF' });
+      return;
+    }
+
+    if (!isAllowed('autoToggle', telegramId, config.autoToggleRateLimitWindowMs, config.autoToggleRateLimitMax)) {
+      res.status(429).json({ error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Try again later.' });
+      return;
+    }
+
+    if (!activeRoom) {
+      res.status(200).json({ success: false, error: 'NO_ROOM' });
+      return;
+    }
+
+    const value = autoBingoHeader === 'ON';
+    activeRoom.setAutoForPlayer(telegramId, value);
+
+    res.status(200).json({ success: true, auto: value });
+  } catch (err) {
+    console.error('[toggleAuto]', err);
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'Server error — try again.' });
+  }
+}
+
 // ── POST /internal/game-control ──
 export async function gameControl(req: Request, res: Response): Promise<void> {
   try {
