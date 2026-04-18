@@ -122,21 +122,18 @@ export default function WinnerRevealModal({
 
   const uniqueWinnerCount = grouped.length;
 
-  // Show the viewing player's first winning board card (or first winner's card if viewer didn't win)
-  const displayBoardId = useMemo(() => {
-    const me = grouped.find(g => g.telegramId === Number(myTelegramId));
-    if (me) return me.boardIds[0];
-    return grouped[0]?.boardIds[0] ?? null;
-  }, [grouped, myTelegramId]);
-
-  const displayCard = displayBoardId
-    ? (BINGO_CARDS as Record<string, number[][]>)[String(displayBoardId)]
-    : null;
-
-  const patternCells = useMemo(() => {
-    if (!displayCard) return new Set<string>();
-    return findWinningPatternCells(displayCard, calledSet);
-  }, [displayCard, calledSet]);
+  const allWinningBoards = useMemo(() => {
+    const cards = BINGO_CARDS as Record<string, number[][]>;
+    const result: Array<{ boardId: number; card: number[][]; patternCells: Set<string> }> = [];
+    for (const g of grouped) {
+      for (const bid of g.boardIds) {
+        const card = cards[String(bid)];
+        if (!card) continue;
+        result.push({ boardId: bid, card, patternCells: findWinningPatternCells(card, calledSet) });
+      }
+    }
+    return result;
+  }, [grouped, calledSet]);
 
   return (
     <div className="reveal-overlay">
@@ -168,7 +165,7 @@ export default function WinnerRevealModal({
                     <span className="reveal-winner-initial">{initial}</span>
                     <div className="reveal-winner-info">
                       <span className="reveal-winner-name">
-                        {g.boardCount > 1 ? '2x' : '1x'} {g.name}
+                        <span style={g.boardCount > 1 ? { color: '#ff8c00', fontWeight: 700 } : undefined}>{g.boardCount > 1 ? '2x' : '1x'}</span> {g.name}
                       </span>
                       <span className="reveal-winner-boards">{boardLabel}</span>
                     </div>
@@ -177,20 +174,19 @@ export default function WinnerRevealModal({
               })}
             </div>
 
-            {/* Single bingo card with winning pattern highlighted green */}
-            {displayCard && (
-              <div className="reveal-card-wrapper">
+            {allWinningBoards.map(({ boardId, card, patternCells: pc }) => (
+              <div className="reveal-card-wrapper" key={boardId}>
                 <div className="reveal-card-headers">
                   {BINGO_LETTERS.map((h, i) => (
                     <span key={h} style={{ color: COL_COLORS[i] }}>{h}</span>
                   ))}
                 </div>
-                {displayCard.map((row, ri) => (
+                {card.map((row, ri) => (
                   <div key={ri} className="reveal-card-row">
                     {row.map((cell, ci) => {
                       const isFree = ri === 2 && ci === 2;
                       const cellKey = `${ri}-${ci}`;
-                      const isPattern = patternCells.has(cellKey);
+                      const isPattern = pc.has(cellKey);
                       const isCalled = calledSet.has(cell);
                       let cls = 'reveal-card-cell';
                       if (isFree) cls += ' rc-free';
@@ -205,10 +201,10 @@ export default function WinnerRevealModal({
                   </div>
                 ))}
                 <span className="reveal-card-label">
-                  {t('board_number', { id: displayBoardId })}
+                  {t('board_number', { id: boardId })}
                 </span>
               </div>
-            )}
+            ))}
           </>
         )}
 
