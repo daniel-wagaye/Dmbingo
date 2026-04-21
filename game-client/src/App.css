@@ -42,7 +42,7 @@ body {
 }
 
 html.tg-fullscreen #root {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 45px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 60px);
   padding-bottom: env(safe-area-inset-bottom, 2px);
 }
 
