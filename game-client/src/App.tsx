@@ -31,7 +31,7 @@ function AppRoutes() {
       <Toaster
         position="top-center"
         containerStyle={{
-          top: 'calc(env(safe-area-inset-top, 0px) + 35px)',
+          top: 'calc(env(safe-area-inset-top, 0px) + 45px)',
         }}
         toastOptions={{
           style: {
