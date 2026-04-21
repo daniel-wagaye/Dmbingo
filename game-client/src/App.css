@@ -42,8 +42,8 @@ body {
 }
 
 html.tg-fullscreen #root {
-  padding-top: calc(env(safe-area-inset-top, 0px) + 35px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 45px);
+  padding-bottom: env(safe-area-inset-bottom, 2px);
 }
 
 /* Spinner */

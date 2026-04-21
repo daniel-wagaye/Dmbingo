@@ -378,7 +378,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
 }
 

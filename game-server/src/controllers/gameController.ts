@@ -180,10 +180,10 @@ export async function claimBingo(req: Request, res: Response): Promise<void> {
 export async function toggleAuto(req: Request, res: Response): Promise<void> {
   try {
     const telegramId = req.telegramUser!.telegram_id;
-    const autoBingoHeader = req.header('X-Auto-Bingo');
+    const autoValue = req.body?.auto;
 
-    if (autoBingoHeader !== 'ON' && autoBingoHeader !== 'OFF') {
-      res.status(400).json({ error: 'INVALID_VALUE', message: 'X-Auto-Bingo header must be ON or OFF' });
+    if (typeof autoValue !== 'boolean') {
+      res.status(400).json({ error: 'INVALID_VALUE', message: 'body.auto must be a boolean' });
       return;
     }
 
@@ -197,13 +197,12 @@ export async function toggleAuto(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const value = autoBingoHeader === 'ON';
-    activeRoom.setAutoForPlayer(telegramId, value);
+    activeRoom.setAutoForPlayer(telegramId, autoValue);
 
-    res.status(200).json({ success: true, auto: value });
+    res.status(200).json({ success: true, auto: autoValue });
   } catch (err) {
     console.error('[toggleAuto]', err);
-    res.status(500).json({ error: 'SERVER_ERROR', message: 'Server error — try again.' });
+    res.status(500).json({ error: 'SERVER_ERROR', message: 'No Internet — try again.' });
   }
 }
 

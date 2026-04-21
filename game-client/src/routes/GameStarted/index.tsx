@@ -197,9 +197,10 @@ export default function GameStarted({ telegramId, timeSync }: GameStartedProps) 
         {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || '',
-            'X-Auto-Bingo': newValue ? 'ON' : 'OFF',
           },
+          body: JSON.stringify({ auto: newValue }),
           signal: controller.signal,
         }
       );

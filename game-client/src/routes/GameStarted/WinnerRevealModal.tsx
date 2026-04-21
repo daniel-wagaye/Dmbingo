@@ -174,6 +174,7 @@ export default function WinnerRevealModal({
               })}
             </div>
 
+            <div className="reveal-cards-scroll">
             {allWinningBoards.map(({ boardId, card, patternCells: pc }) => (
               <div className="reveal-card-wrapper" key={boardId}>
                 <div className="reveal-card-headers">
@@ -205,6 +206,7 @@ export default function WinnerRevealModal({
                 </span>
               </div>
             ))}
+            </div>
           </>
         )}
 
