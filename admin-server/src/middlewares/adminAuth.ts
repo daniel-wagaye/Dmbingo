@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
+import { signAdminTokens } from '../services/authService';
+import { setAuthCookies } from '../controllers/authController';
 
 export type AdminRole = 'super_admin' | 'withdrawal_admin';
 type AdminPayload = { adminId: number; role: AdminRole };
@@ -17,6 +19,10 @@ export const adminAuth = (req: Request, res: Response, next: NextFunction) => {
   try {
     const payload = jwt.verify(token, config.jwtSecret) as AdminPayload;
     (req as Request & { admin?: { adminId: number; role: string } }).admin = payload;
+
+    const tokens = signAdminTokens(payload.adminId, payload.role);
+    setAuthCookies(res, tokens);
+
     return next();
   } catch {
     return res.status(401).json({ error: 'unauthorized' });

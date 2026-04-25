@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import { fetchTransferHistory, TransferHistoryRow } from '../../services/historyService';
 
 const TransferHistory = () => {
@@ -12,6 +14,7 @@ const TransferHistory = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selected, setSelected] = useState<TransferHistoryRow | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadTransfers = async (nextPage = page) => {
     setLoading(true);
@@ -125,10 +128,10 @@ const TransferHistory = () => {
                 <tr key={row.transfer_id} className="history-row" onClick={() => setSelected(row)}>
                   <td>{row.transfer_id}</td>
                   <td>
-                    {row.sender_id ?? '-'} / {row.sender_phone ?? '-'}
+                    <TelegramIdCell telegramId={row.sender_id} onClick={setDetailId} /> / {row.sender_phone ?? '-'}
                   </td>
                   <td>
-                    {row.receiver_id ?? '-'} / {row.receiver_phone ?? '-'}
+                    <TelegramIdCell telegramId={row.receiver_id} onClick={setDetailId} /> / {row.receiver_phone ?? '-'}
                   </td>
                   <td>{row.wallet ?? '-'}</td>
                   <td>{row.amount}</td>
@@ -163,6 +166,8 @@ const TransferHistory = () => {
           Next
         </button>
       </div>
+
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
 
       {selected ? (
         <div className="drawer-overlay" role="presentation" onClick={closeDrawer}>

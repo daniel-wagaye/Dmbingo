@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import {
   AdminCreditHistoryRow,
   exportAdminCreditHistory,
@@ -18,6 +20,7 @@ const AdminCreditHistory = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadCredits = async (nextPage = page) => {
     setLoading(true);
@@ -181,7 +184,7 @@ const AdminCreditHistory = () => {
               rows.map((row) => (
                 <tr key={row.credit_id}>
                   <td>{row.credit_id}</td>
-                  <td>{row.telegram_id ?? '-'}</td>
+                  <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>Credit User</td>
                   <td>{row.credited_wallet ?? '-'}</td>
                   <td>{row.amount}</td>
@@ -214,6 +217,7 @@ const AdminCreditHistory = () => {
           Next
         </button>
       </div>
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
     </div>
   );
 };

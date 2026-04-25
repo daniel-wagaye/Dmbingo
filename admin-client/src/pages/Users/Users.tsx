@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import { creditUser, fetchUsers } from '../../services/userService';
 
 type UserRow = {
@@ -33,6 +35,7 @@ const Users = () => {
   const [creditAmount, setCreditAmount] = useState('');
   const [creditWallet, setCreditWallet] = useState<'withdrawal' | 'non_withdrawal' | ''>('');
   const [creditLoading, setCreditLoading] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const columns = useMemo(
     () => [
@@ -84,11 +87,11 @@ const Users = () => {
 
   const toggleSort = (key: string) => {
     if (sortBy === key) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
       return;
     }
     setSortBy(key);
-    setSortOrder('asc');
+    setSortOrder('desc');
   };
 
   const openCredit = (user: UserRow) => {
@@ -211,7 +214,7 @@ const Users = () => {
             ) : (
               rows.map((row) => (
                 <tr key={row.telegram_id}>
-                  <td>{row.telegram_id}</td>
+                  <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>{row.first_name ?? '-'}</td>
                   <td>{row.phone_number ?? '-'}</td>
                   <td>{row.username ?? '-'}</td>
@@ -256,6 +259,8 @@ const Users = () => {
           Next
         </button>
       </div>
+
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
 
       {creditOpen && selectedUser ? (
         <div className="modal-overlay" role="presentation">

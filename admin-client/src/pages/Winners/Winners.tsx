@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import { fetchWinnerHistory, exportWinnerHistory, WinnerHistoryRow } from '../../services/historyService';
 
 const formatNumber = (value: string | number | null) =>
@@ -19,6 +21,7 @@ const Winners = () => {
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadWinners = async (nextPage = page) => {
     setLoading(true);
@@ -173,7 +176,7 @@ const Winners = () => {
                 <tr key={row.id}>
                   <td>{row.id}</td>
                   <td>{row.game_id ?? '-'}</td>
-                  <td>{row.telegram_id ?? '-'}</td>
+                  <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>{row.first_name ?? '-'}</td>
                   <td>{row.board_id ?? '-'}</td>
                   <td>{formatNumber(row.credited_amount)}</td>
@@ -206,6 +209,8 @@ const Winners = () => {
           Next
         </button>
       </div>
+
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
 
       {exportModalOpen ? (
         <div className="modal-overlay" role="presentation">

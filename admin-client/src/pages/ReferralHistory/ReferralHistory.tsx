@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import { fetchReferralHistory, ReferralHistoryRow } from '../../services/historyService';
 
 const ReferralHistory = () => {
@@ -11,6 +13,7 @@ const ReferralHistory = () => {
   const [rewarded, setRewarded] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadReferrals = async (nextPage = page) => {
     setLoading(true);
@@ -119,8 +122,8 @@ const ReferralHistory = () => {
               rows.map((row) => (
                 <tr key={row.referral_id}>
                   <td>{row.referral_id}</td>
-                  <td>{row.referrer_id ?? '-'}</td>
-                  <td>{row.referred_user_id ?? '-'}</td>
+                  <td><TelegramIdCell telegramId={row.referrer_id} onClick={setDetailId} /></td>
+                  <td><TelegramIdCell telegramId={row.referred_user_id} onClick={setDetailId} /></td>
                   <td>
                     <span className={`status-pill ${row.rewarded ? 'active' : 'inactive'}`}>
                       {row.rewarded ? 'Yes' : 'No'}
@@ -156,6 +159,7 @@ const ReferralHistory = () => {
           Next
         </button>
       </div>
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
     </div>
   );
 };

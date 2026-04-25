@@ -1609,3 +1609,65 @@ body {
     align-items: stretch;
   }
 }
+
+/* Telegram ID clickable link */
+.telegram-id-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent-secondary, #22d3ee);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.telegram-id-link:hover {
+  color: var(--accent, #ff7a1a);
+  text-decoration: underline;
+}
+
+/* User details popup modal */
+.user-details-modal {
+  max-width: 380px;
+  width: 92%;
+}
+
+.user-details-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.user-detail-row:last-child {
+  border-bottom: none;
+}
+
+.user-detail-label {
+  color: var(--muted, #94a3b8);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.user-detail-value {
+  color: var(--text, #e2e8f0);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+
+.user-detail-value.mono {
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 0.5px;
+}

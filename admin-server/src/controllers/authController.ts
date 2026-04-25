@@ -27,9 +27,10 @@ const checkRateLimit = (key: string, limit: number, windowMs: number) => {
   return true;
 };
 
-const cookieSameSite: 'none' | 'lax' = isSecure ? 'none' : 'lax';
+export const cookieSameSite: 'none' | 'lax' = isSecure ? 'none' : 'lax';
+export const isSecureCookie = isSecure;
 
-const setAuthCookies = (
+export const setAuthCookies = (
   res: Response,
   tokens: { accessToken: string; refreshToken: string }
 ) => {
@@ -37,13 +38,13 @@ const setAuthCookies = (
     httpOnly: true,
     secure: isSecure,
     sameSite: cookieSameSite,
-    maxAge: 15 * 60 * 1000,
+    maxAge: 2 * 60 * 60 * 1000,
   });
   res.cookie('admin_refresh_token', tokens.refreshToken, {
     httpOnly: true,
     secure: isSecure,
     sameSite: cookieSameSite,
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: 2 * 60 * 60 * 1000,
   });
 };
 

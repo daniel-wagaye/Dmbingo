@@ -129,6 +129,10 @@ const resetLoginAttempts = async (adminId: number) => {
   );
 };
 
+export const signAdminTokens = (adminId: number, role: string) => {
+  return createTokens(adminId, role as AdminRow['role']);
+};
+
 const createTokens = (adminId: number, role: AdminRow['role']) => {
   if (!config.jwtSecret || !config.jwtRefreshSecret) {
     throw new Error('JWT_SECRET_ADMIN is required');

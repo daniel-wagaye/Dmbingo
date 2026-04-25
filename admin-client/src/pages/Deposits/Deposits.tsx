@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import { approveDeposit, createDeposit, fetchDeposits, rejectDeposit } from '../../services/depositService';
 
 type DepositRow = {
@@ -39,6 +41,7 @@ const Deposits = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadDeposits = async (nextPage = page) => {
     setLoading(true);
@@ -264,7 +267,7 @@ const Deposits = () => {
                 return (
                   <tr key={row.deposit_id}>
                     <td>{row.deposit_id}</td>
-                    <td>{row.telegram_id ?? '-'}</td>
+                    <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                     <td>{row.first_name ?? '-'}</td>
                     <td>{formatNumber(row.amount)}</td>
                     <td>{row.bank ?? '-'}</td>
@@ -321,6 +324,8 @@ const Deposits = () => {
           Next
         </button>
       </div>
+
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
 
       {rejectOpen && selectedDeposit ? (
         <div className="modal-overlay" role="presentation">

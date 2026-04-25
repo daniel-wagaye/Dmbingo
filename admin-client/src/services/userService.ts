@@ -56,6 +56,22 @@ export const fetchUsers = async (params: {
   return request<UsersResponse>(`/admin/users?${query.toString()}`, { method: 'GET' });
 };
 
+export type UserDetail = {
+  telegram_id: number;
+  first_name: string | null;
+  phone_number: string | null;
+  username: string | null;
+  withdrawal_wallet: string;
+  non_withdrawal_wallet: string;
+  referral_count: number;
+  last_referred_date: string | null;
+  language: string;
+  created_at: string;
+};
+
+export const fetchUserByTelegramId = async (telegramId: number) =>
+  request<UserDetail>(`/admin/users/${telegramId}`, { method: 'GET' });
+
 export const creditUser = async (payload: {
   telegramId: number;
   amount: number;

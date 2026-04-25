@@ -53,7 +53,7 @@ import {
   declineWithdrawal,
   listWithdrawals,
 } from '../controllers/withdrawController';
-import { creditUser, listUsers } from '../controllers/userController';
+import { creditUser, getUserByTelegramId, listUsers } from '../controllers/userController';
 
 const router = Router();
 
@@ -270,6 +270,7 @@ router.get('/stats/:statKey', adminAuth, requireAdminRole(['super_admin']), asyn
 });
 
 router.get('/users', adminAuth, listUsers);
+router.get('/users/:telegramId', adminAuth, getUserByTelegramId);
 router.post('/credit', adminAuth, creditUser);
 router.get('/admins', adminAuth, listAdmins);
 router.post('/admins', adminAuth, createAdmin);

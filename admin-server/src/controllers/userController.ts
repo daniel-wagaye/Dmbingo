@@ -38,6 +38,36 @@ const sendTelegramCreditNotice = async (
   });
 };
 
+export const getUserByTelegramId = async (req: Request, res: Response) => {
+  const telegramId = Number(req.params.telegramId);
+  if (!Number.isFinite(telegramId) || telegramId <= 0) {
+    return res.status(400).json({ error: 'invalid_telegram_id' });
+  }
+
+  const result = await pool.query(
+    `SELECT
+       telegram_id,
+       first_name,
+       phone_number,
+       username,
+       withdrawal_wallet,
+       non_withdrawal_wallet,
+       referral_count,
+       last_referred_date,
+       language,
+       created_at
+     FROM users
+     WHERE telegram_id = $1`,
+    [telegramId]
+  );
+
+  if (!result.rows.length) {
+    return res.status(404).json({ error: 'user_not_found' });
+  }
+
+  return res.json(result.rows[0]);
+};
+
 export const listUsers = async (req: Request, res: Response) => {
   const page = Math.max(Number.parseInt((req.query.page as string) ?? '1', 10), 1);
   const search = (req.query.search as string | undefined)?.trim();

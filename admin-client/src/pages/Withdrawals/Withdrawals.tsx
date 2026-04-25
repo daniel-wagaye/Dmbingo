@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import {
   approveWithdrawal,
   declineWithdrawal,
@@ -61,6 +63,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const columns = useMemo(
     () =>
@@ -293,7 +296,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
                 return (
                   <tr key={row.withdrawal_id}>
                   <td>{row.withdrawal_id}</td>
-                  <td>{row.telegram_id}</td>
+                  <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>{row.first_name ?? '-'}</td>
                   <td>{formatNumber(row.amount)}</td>
                   <td>{row.bank}</td>
@@ -385,6 +388,8 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
           Next
         </button>
       </div>
+
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
 
       {approveOpen && selected ? (
         <div className="modal-overlay" role="presentation">

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import TelegramIdCell from '../../components/TelegramIdCell';
+import UserDetailsModal from '../../components/UserDetailsModal';
 import {
   CouponHistoryRow,
   exportCouponHistory,
@@ -15,6 +17,7 @@ const CouponHistory = () => {
   const [telegramId, setTelegramId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const loadHistory = async (nextPage = page) => {
     setLoading(true);
@@ -156,11 +159,7 @@ const CouponHistory = () => {
                   <td>{row.coupon_code ?? '-'}</td>
                   <td>{row.coupon_id ?? '-'}</td>
                   <td>
-                    {row.user_telegram_id ? (
-                      <a href={`/admin/users/${row.user_telegram_id}`}>{row.user_telegram_id}</a>
-                    ) : (
-                      '-'
-                    )}
+                    <TelegramIdCell telegramId={row.user_telegram_id} onClick={setDetailId} />
                   </td>
                   <td>{new Date(row.claimed_at).toLocaleString()}</td>
                   <td>{row.coupon_prize ?? '-'}</td>
@@ -200,6 +199,7 @@ const CouponHistory = () => {
           Next
         </button>
       </div>
+      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
     </div>
   );
 };
