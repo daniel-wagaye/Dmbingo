@@ -11,6 +11,7 @@ import couponRoutes from './routes/api/couponRoutes';
 import depositRoutes from './routes/api/depositRoutes';
 import withdrawRoutes from './routes/api/withdrawRoutes';
 import transferRoutes from './routes/api/transferRoutes';
+import leaderboardRoutes from './routes/api/leaderboardRoutes';
 import internalRoutes from './routes/internalRoutes';
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api', couponRoutes);
 app.use('/api', depositRoutes);
 app.use('/api', withdrawRoutes);
 app.use('/api', transferRoutes);
+app.use('/api', leaderboardRoutes);
 app.use(internalRoutes);
 
 // ── Global error handler ──
