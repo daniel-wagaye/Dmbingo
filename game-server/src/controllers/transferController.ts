@@ -23,12 +23,10 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
     }
 
     // 2. Sanitize inputs
-    let { from_wallet, amount, recipient_phone } = req.body;
+    let { amount, recipient_phone } = req.body;
+    const from_wallet = 'withdrawal';
 
-    if (!from_wallet || !['withdrawal', 'non_withdrawal'].includes(from_wallet)) {
-      res.status(400).json({ error: 'INVALID_WALLET', message: 'Invalid wallet selection' });
-      return;
-    }
+    // Commission removed — transfers are free.
 
     // Sanitize amount: strip whitespace, leading zeros
     let amountStr = String(amount || '').replace(/\s/g, '');
@@ -60,9 +58,9 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // 3. Commission calculation
-    const commission = roundHalfUp(amountNum * config.transferCommissionPercent / 100, 2);
-    const total = roundHalfUp(amountNum + commission, 2);
+    // 3. No commission on transfers
+    const commission = 0;
+    const total = amountNum;
 
     // 4. Normalize phone: 0912345678 → +251912345678
     const normalizedPhone = '+251' + phone.slice(1);
@@ -83,9 +81,7 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // 6. Atomic transaction
-    const walletCol = from_wallet === 'withdrawal' ? 'withdrawal_wallet' : 'non_withdrawal_wallet';
-
+    // 6. Atomic transaction — always from sender withdrawal_wallet to receiver non_withdrawal_wallet
     const result = await sql.begin(async (tx: any) => {
       // Lock both users in deadlock-safe order
       const [id1, id2] = [senderIdNum, recipientId].sort((a, b) => a - b);
@@ -102,44 +98,30 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
         return { status: 400, body: { error: 'USER_NOT_FOUND', message: "User doesn't exist" } };
       }
 
-      const senderBalance = parseFloat(sender[walletCol]);
+      const senderBalance = parseFloat(sender.withdrawal_wallet);
       if (senderBalance < total) {
         return { status: 400, body: { error: 'INSUFFICIENT_BALANCE', message: 'Insufficient Balance' } };
       }
 
-      // Debit sender (amount + commission) — use raw SQL for dynamic column
-      if (from_wallet === 'withdrawal') {
-        await tx`
-          UPDATE users SET withdrawal_wallet = withdrawal_wallet - ${total}
-          WHERE telegram_id = ${telegramId}
-        `;
-      } else {
-        await tx`
-          UPDATE users SET non_withdrawal_wallet = non_withdrawal_wallet - ${total}
-          WHERE telegram_id = ${telegramId}
-        `;
-      }
+      // Debit sender withdrawal_wallet
+      await tx`
+        UPDATE users SET withdrawal_wallet = withdrawal_wallet - ${total}
+        WHERE telegram_id = ${telegramId}
+      `;
 
-      // Credit receiver (amount only, no commission)
-      if (from_wallet === 'withdrawal') {
-        await tx`
-          UPDATE users SET withdrawal_wallet = withdrawal_wallet + ${amountNum}
-          WHERE telegram_id = ${recipientId}
-        `;
-      } else {
-        await tx`
-          UPDATE users SET non_withdrawal_wallet = non_withdrawal_wallet + ${amountNum}
-          WHERE telegram_id = ${recipientId}
-        `;
-      }
+      // Credit receiver non_withdrawal_wallet
+      await tx`
+        UPDATE users SET non_withdrawal_wallet = non_withdrawal_wallet + ${amountNum}
+        WHERE telegram_id = ${recipientId}
+      `;
 
       // Insert history
       await tx`
         INSERT INTO transfer_history (sender_id, receiver_id, wallet, amount, commission, created_at)
-        VALUES (${telegramId}, ${recipientId}, ${from_wallet}, ${amountNum}, ${commission}, NOW())
+        VALUES (${telegramId}, ${recipientId}, 'withdrawal', ${amountNum}, 0, NOW())
       `;
 
-      return { status: 200, body: { success: true, amount: amountNum, commission, phone } };
+      return { status: 200, body: { success: true, amount: amountNum, commission: 0, phone } };
     });
 
     res.status(result.status).json(result.body);
@@ -148,7 +130,6 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
     if (result.status === 200) {
       const senderRows = await sql`SELECT first_name FROM users WHERE telegram_id = ${telegramId}`;
       const senderName = senderRows[0]?.first_name || 'Someone';
-      const walletType = from_wallet === 'withdrawal' ? 'withdrawal' : 'non-withdrawal';
 
       // Fetch recipient fresh balances
       const freshRecipient = await sql`
@@ -160,7 +141,7 @@ export async function sendTransfer(req: Request, res: Response): Promise<void> {
 
       bot.telegram.sendMessage(
         recipientId,
-        `እንኳን ደስ አለዎት! 🎉 \nከ${senderName} የ${amountNum} ብር ገቢ ወደ ${walletType} ዋሌትዎ ገቢ ሆኗል። 💰\nጠቅላላ የዋሌትዎ ቀሪ ሂሳብ፡ ${totalWallet} ብር.`,
+        `እንኳን ደስ አለዎት! 🎉 \nከ${senderName} የ${amountNum} ብር ገቢ ወደ non-withdrawal ዋሌትዎ ገቢ ሆኗል። 💰\nጠቅላላ የዋሌትዎ ቀሪ ሂሳብ፡ ${totalWallet} ብር.`,
         {
           // This ID triggers "Heart" (❤️) effect in Telegram
           message_effect_id: "5159385139981059251"

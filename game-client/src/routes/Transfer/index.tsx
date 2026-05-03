@@ -5,7 +5,6 @@ import { sendTransfer } from '../../services/transferService';
 import './Transfer.css';
 
 const PHONE_RE = /^(09|07)\d{8}$/;
-const COMMISSION_RATE = 0.02;
 
 interface TransferModalProps {
   withdrawableBalance: number;
@@ -21,7 +20,6 @@ export default function TransferModal({
   onSuccess,
 }: TransferModalProps) {
   const { t } = useTranslation();
-  const [wallet, setWallet] = useState<'withdrawal' | 'non_withdrawal' | ''>('');
   const [amount, setAmount] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -33,11 +31,6 @@ export default function TransferModal({
 
   const handleSubmit = async () => {
     if (submitting) return;
-
-    if (!wallet) {
-      toast.error(t('transfer_select_wallet'));
-      return;
-    }
 
     const amountNum = parseInt(amount, 10);
     if (isNaN(amountNum) || amount.includes('.')) {
@@ -53,10 +46,7 @@ export default function TransferModal({
       return;
     }
 
-    const commission = Math.round(amountNum * COMMISSION_RATE * 100) / 100;
-    const total = amountNum + commission;
-    const balance = wallet === 'withdrawal' ? withdrawableBalance : nonWithdrawableBalance;
-    if (balance < total) {
+    if (withdrawableBalance < amountNum) {
       toast.error(t('transfer_insufficient'));
       return;
     }
@@ -70,7 +60,7 @@ export default function TransferModal({
     setSubmitting(true);
     try {
       const result = await sendTransfer({
-        from_wallet: wallet,
+        from_wallet: 'withdrawal',
         amount: amountNum,
         recipient_phone: trimmedPhone,
       });
@@ -80,7 +70,7 @@ export default function TransferModal({
         toast.success(t('transfer_success', {
           amount: result.amount,
           phone: result.phone,
-          commission: result.commission,
+          commission: 0,
         }));
       }
     } catch (err: any) {
@@ -136,22 +126,7 @@ export default function TransferModal({
         </div>
 
         <div className="transfer-form">
-          {/* Wallet source */}
-          <div className="transfer-field">
-            <label className="transfer-label">{t('transfer_wallet_source')}</label>
-            <select
-              className="modal-input withdraw-select"
-              value={wallet}
-              onChange={e => setWallet(e.target.value as any)}
-              disabled={submitting}
-            >
-              <option value="">{t('transfer_select_wallet')}</option>
-              <option value="withdrawal">{t('transfer_wallet_withdrawal')}</option>
-              <option value="non_withdrawal">{t('transfer_wallet_non_withdrawal')}</option>
-            </select>
-          </div>
-
-          {/* Amount */}
+            {/* Amount */}
           <div className="transfer-field">
             <label className="transfer-label">{t('transfer_amount')}</label>
             <input

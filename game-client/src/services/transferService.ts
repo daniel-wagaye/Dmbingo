@@ -1,7 +1,7 @@
 import { apiClient } from './apiClient';
 
 export interface TransferRequest {
-  from_wallet: 'withdrawal' | 'non_withdrawal';
+  from_wallet: 'withdrawal';
   amount: number;
   recipient_phone: string;
 }
