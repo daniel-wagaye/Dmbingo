@@ -122,8 +122,8 @@ export default function DepositModal({ onClose, onSuccess }: DepositModalProps) 
           ))}
         </div>
 
-        <p style={{ color: 'green' }}>
-          <strong style={{ paddingLeft: '50px'}}>! ከ10 ብር ጀምሮ ገቢ ማድረግ ይቻላልይቻላል።</strong>
+        <p style={{ color: 'orange' }}>
+          <strong style={{ paddingLeft: '50px'}}>! ከ10 ብር ጀምሮ ገቢ ማድረግ ይቻላል።</strong>
         </p>
         <p style={{ color: 'orange' }}>
           <strong style={{ paddingLeft: '51px'}}>! Other ባንክ ማስገባት የተከለከለ ነው።</strong>
