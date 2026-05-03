@@ -8,12 +8,14 @@ const PHONE_RE = /^(09|07)\d{8}$/;
 
 interface TransferModalProps {
   withdrawableBalance: number;
+  nonWithdrawableBalance: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export default function TransferModal({
   withdrawableBalance,
+  nonWithdrawableBalance,
   onClose,
   onSuccess,
 }: TransferModalProps) {
@@ -68,6 +70,7 @@ export default function TransferModal({
         toast.success(t('transfer_success', {
           amount: result.amount,
           phone: result.phone,
+          commission: 0,
         }));
       }
     } catch (err: any) {
@@ -110,11 +113,15 @@ export default function TransferModal({
           <button className="history-close" onClick={onClose}>✕</button>
         </div>
 
-        {/* Available balance */}
+        {/* Wallet grid (read-only) */}
         <div className="transfer-wallets">
           <div className="transfer-wallet-item tw-green">
             <span className="tw-label">{t('transfer_wallet_withdrawal')}</span>
             <span className="tw-value">{withdrawableBalance.toFixed(2)}</span>
+          </div>
+          <div className="transfer-wallet-item tw-orange" style={{ display: 'none' }}>
+            <span className="tw-label">{t('transfer_wallet_non_withdrawal')}</span>
+            <span className="tw-value">{nonWithdrawableBalance.toFixed(2)}</span>
           </div>
         </div>
 
