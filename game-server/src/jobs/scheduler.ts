@@ -1,5 +1,6 @@
 import { callTransitionPicking } from '../services/gameService';
 import { startCallingLoop } from './caller';
+import { stopBotPicks } from './botManager';
 import { activeRoom } from '../colyseus/GameRoom';
 
 let pickingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -40,6 +41,8 @@ export function schedulePickingTimer(delayMs: number): void {
         schedulePickingTimer(Math.max(newDelay, 0));
       } else if (result.action === 'started') {
         console.log(`[scheduler] Game ${result.game_id} started with ${result.player_count} players. Prize: ${result.prize_amount}`);
+
+        stopBotPicks();
 
         if (activeRoom) {
           activeRoom.startGame(

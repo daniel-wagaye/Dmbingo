@@ -7,6 +7,7 @@ import app from './app';
 import { GameRoom, activeRoom } from './colyseus/GameRoom';
 import { callRecoverGameState } from './services/gameService';
 import { schedulePickingTimer } from './jobs/scheduler';
+import { startBotPicksForGame, stopBotPicks } from './jobs/botManager';
 import { startCleanupCron } from './jobs/cleanupCron';
 import { startHealthChecks } from './utils/health';
 
@@ -126,10 +127,20 @@ async function initializeAndRecover(): Promise<void> {
       }
       // maintenance or other phases → no timers needed
 
+      startBotPicksForGame({
+        gameId: result?.new_game_id ? Number(result.new_game_id) : 0,
+        phase: newPhase ?? result?.phase ?? 'maintenance',
+        pickingEndsAt: result?.picking_ends_at,
+        botStatus: result?.bot_status,
+        minBotAmount: result?.min_bot_amount,
+        maxBotAmount: result?.max_bot_amount,
+      });
+
       return; // success
     } catch (err) {
       console.error(`[recovery] Attempt ${attempt} failed:`, err);
       if (attempt >= config.maxRecoveryRetries) {
+        stopBotPicks();
         if (activeRoom) {
           activeRoom.setNewGame({
             phase: 'maintenance',

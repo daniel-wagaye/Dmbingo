@@ -71,7 +71,8 @@ export async function createNewPickingGame(): Promise<any> {
       }
 
       const configRows = await tx`
-        SELECT stake_amount, picking_countdown_end_time, minimum_player
+        SELECT stake_amount, picking_countdown_end_time, minimum_player,
+               bot_status, min_bot_amount, max_bot_amount
         FROM game_config WHERE id = 1
       `;
       if (!configRows.length) throw new Error('CONFIG_MISSING');
@@ -89,7 +90,12 @@ export async function createNewPickingGame(): Promise<any> {
           NULL, NULL, NULL, NULL, NOW()
         ) RETURNING *
       `;
-      return inserted[0];
+      return {
+        ...inserted[0],
+        bot_status: cfg.bot_status,
+        min_bot_amount: cfg.min_bot_amount,
+        max_bot_amount: cfg.max_bot_amount,
+      };
     });
   }, 'create_new_picking_game');
 }

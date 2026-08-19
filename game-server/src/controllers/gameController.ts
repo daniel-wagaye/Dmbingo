@@ -9,6 +9,7 @@ import {
 } from '../services/gameService';
 import { getBingoCard, hasBingoPattern } from '../services/bingoValidator';
 import { schedulePickingTimer } from '../jobs/scheduler';
+import { startBotPicksForGame } from '../jobs/botManager';
 import { activeRoom } from '../colyseus/GameRoom';
 
 // ── Global rate limiter for game-control (not per-user) ──
@@ -266,6 +267,16 @@ export async function gameControl(req: Request, res: Response): Promise<void> {
     const pickingEndsAt = new Date(newGame.picking_ends_at);
     const durationMs = pickingEndsAt.getTime() - Date.now();
     schedulePickingTimer(Math.max(durationMs, 0));
+
+    // 8. Schedule the NPC/bot picks for this picking phase
+    startBotPicksForGame({
+      gameId: Number(newGame.game_id),
+      phase: 'picking',
+      pickingEndsAt: newGame.picking_ends_at,
+      botStatus: newGame.bot_status,
+      minBotAmount: newGame.min_bot_amount,
+      maxBotAmount: newGame.max_bot_amount,
+    });
 
     res.status(200).json({
       success: true,

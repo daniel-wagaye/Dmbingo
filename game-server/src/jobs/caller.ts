@@ -4,6 +4,7 @@ import {
   callCreateNextGame,
 } from '../services/gameService';
 import { schedulePickingTimer } from './scheduler';
+import { startBotPicksForGame } from './botManager';
 import { activeRoom } from '../colyseus/GameRoom';
 import { getBingoCard, hasBingoPattern } from '../services/bingoValidator';
 
@@ -89,6 +90,15 @@ function scheduleRevealEnd(): void {
           const delay = new Date(nextGame.picking_ends_at).getTime() - Date.now();
           schedulePickingTimer(Math.max(delay, 0));
         }
+
+        startBotPicksForGame({
+          gameId: nextGame.game_id ? Number(nextGame.game_id) : 0,
+          phase: nextGame.phase,
+          pickingEndsAt: nextGame.picking_ends_at,
+          botStatus: nextGame.bot_status,
+          minBotAmount: nextGame.min_bot_amount,
+          maxBotAmount: nextGame.max_bot_amount,
+        });
       }
     } catch (err) {
       console.error('[caller] create_next_game failed after all retries:', err);
