@@ -1,6 +1,7 @@
 import { callTransitionPicking } from '../services/gameService';
 import { startCallingLoop } from './caller';
 import { stopBotPicks } from './botManager';
+import { startStreakUpdate, collectPlayerTelegramIds } from '../services/streakService';
 import { activeRoom } from '../colyseus/GameRoom';
 
 let pickingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,6 +52,9 @@ export function schedulePickingTimer(delayMs: number): void {
             result.player_count
           );
         }
+
+        // Background — never blocks the calling loop.
+        startStreakUpdate(collectPlayerTelegramIds());
 
         startCallingLoop(result.game_id, result.shuffled_nums);
       }
