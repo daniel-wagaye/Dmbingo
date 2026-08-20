@@ -3,10 +3,15 @@ import app, { markRuntimeDegraded, markRuntimeHealthy } from './app';
 import { config } from './config';
 import { pool } from './db/drizzle';
 import { registerSupportRoutes, startSupportRuntime, stopSupportRuntime } from './support';
+import {
+  startLeaderboardSnapshotRuntime,
+  stopLeaderboardSnapshotRuntime,
+} from './jobs/leaderboardSnapshotScheduler';
 
 const bootstrap = async (): Promise<void> => {
   const supportRuntime = await startSupportRuntime();
   registerSupportRoutes(app, supportRuntime.worker);
+  const leaderboardSnapshotRuntime = startLeaderboardSnapshotRuntime();
 
   let activeServer: Server | null = null;
   let restartTimer: NodeJS.Timeout | null = null;
@@ -102,6 +107,7 @@ const bootstrap = async (): Promise<void> => {
     isShuttingDown = true;
     clearRestartTimer();
     markRuntimeDegraded(`shutdown:${signal}`, restartAttempts);
+    stopLeaderboardSnapshotRuntime(leaderboardSnapshotRuntime);
     await stopSupportRuntime(supportRuntime, signal);
     if (activeServer) {
       const serverToClose = activeServer;

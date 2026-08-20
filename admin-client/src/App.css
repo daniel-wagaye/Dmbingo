@@ -916,6 +916,17 @@ body {
   transform: translateX(26px);
 }
 
+.gameconfig-result {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .gameconfig-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

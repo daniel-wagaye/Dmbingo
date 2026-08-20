@@ -35,6 +35,8 @@ export const config = {
   historyRateLimitMax: parseInt(process.env.HISTORY_RATE_LIMIT_MAX || '10', 10),
   leaderboardRateLimitWindowMs: parseInt(process.env.LEADERBOARD_RATE_LIMIT_WINDOW_MS || '60000', 10),
   leaderboardRateLimitMax: parseInt(process.env.LEADERBOARD_RATE_LIMIT_MAX || '20', 10),
+  leaderboardHistoryRateLimitWindowMs: parseInt(process.env.LEADERBOARD_HISTORY_RATE_LIMIT_WINDOW_MS || '60000', 10),
+  leaderboardHistoryRateLimitMax: parseInt(process.env.LEADERBOARD_HISTORY_RATE_LIMIT_MAX || '20', 10),
   couponRateLimitWindowMs: parseInt(process.env.COUPON_RATE_LIMIT_WINDOW_MS || '60000', 10),
   couponRateLimitMax: parseInt(process.env.COUPON_RATE_LIMIT_MAX || '3', 10),
   autoToggleRateLimitWindowMs: parseInt(process.env.AUTO_TOGGLE_RATE_LIMIT_WINDOW_MS || '60000', 10),

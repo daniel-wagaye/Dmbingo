@@ -5,6 +5,7 @@ import {
   startGameStatus,
   stopGameStatus,
   updateGameConfigField,
+  updateLeaderboardSnapshots,
   wakeUpGame,
 } from '../../services/gameConfigService';
 
@@ -55,6 +56,9 @@ const GameConfig = () => {
 
   const [toggleOpen, setToggleOpen] = useState(false);
   const [toggleTarget, setToggleTarget] = useState<'start' | 'stop' | null>(null);
+
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotLines, setSnapshotLines] = useState<string[]>([]);
 
   const cards: ConfigCard[] = useMemo(() => {
     if (!config) return [];
@@ -232,6 +236,26 @@ const GameConfig = () => {
     }
   };
 
+  const handleUpdateSnapshots = async () => {
+    setSnapshotLoading(true);
+    try {
+      const result = await updateLeaderboardSnapshots();
+      setSnapshotLines(result.lines);
+      if (result.changed) {
+        toast.success('Leaderboard snapshots updated.');
+      } else {
+        toast.success('All leaderboard snapshots are up to date.');
+      }
+    } catch (error) {
+      const lines = (error as Error & { data?: { lines?: string[] } }).data?.lines;
+      setSnapshotLines(lines ?? []);
+      const message = error instanceof Error ? error.message : 'Request failed';
+      toast.error(message === 'Request failed' ? 'Snapshot update failed.' : message);
+    } finally {
+      setSnapshotLoading(false);
+    }
+  };
+
   return (
     <div className="gameconfig-page">
       <div className="gameconfig-header">
@@ -267,6 +291,32 @@ const GameConfig = () => {
             disabled={actionLoading}
           >
             Wake Up
+          </button>
+        </div>
+      </div>
+
+      <div className="gameconfig-toggle-card">
+        <div>
+          <h3>Leaderboard Snapshots</h3>
+          <p className="gameconfig-subtitle">
+            Checks the latest completed day, week and month and saves any that are missing.
+          </p>
+          {snapshotLines.length > 0 ? (
+            <ul className="gameconfig-result">
+              {snapshotLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div className="toggle-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleUpdateSnapshots}
+            disabled={snapshotLoading}
+          >
+            {snapshotLoading ? 'Processing...' : 'Update Leaderboard Snapshots'}
           </button>
         </div>
       </div>

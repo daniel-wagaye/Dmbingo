@@ -74,3 +74,21 @@ export const wakeUpGame = async () =>
   request<{ status: 'ok' }>('/admin/game-control/start', {
     method: 'POST',
   });
+
+export type LeaderboardSnapshotResponse = {
+  status: 'ok' | 'partial_failure';
+  changed: boolean;
+  lines: string[];
+  results: Array<{
+    period: 'daily' | 'weekly' | 'monthly';
+    period_start: string | null;
+    rows_saved: number;
+    updated: boolean;
+    ok: boolean;
+  }>;
+};
+
+export const updateLeaderboardSnapshots = async () =>
+  request<LeaderboardSnapshotResponse>('/admin/leaderboard-snapshots/update', {
+    method: 'POST',
+  });

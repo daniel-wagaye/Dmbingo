@@ -67,6 +67,11 @@ export const config = {
   gameServerSecret: getEnv('GAME_SERVER_SECRET'),
   regexWakeupUrl: getEnv('REGEX_WAKEUP_URL', 'https://deposit-acceptor.onrender.com/internal/regex-wakeup'),
   startCommandPhotoId: getEnv('START_COMMAND_PHOTO_ID'),
+  // Leaderboard snapshot schedules, expressed as HH:MM on the Africa/Addis_Ababa clock.
+  // Each runs a little after midnight so a game finalizing near the boundary is included.
+  leaderboardDailySnapshotTimeEat: getEnv('LEADERBOARD_DAILY_SNAPSHOT_TIME_EAT', '00:05'),
+  leaderboardWeeklySnapshotTimeEat: getEnv('LEADERBOARD_WEEKLY_SNAPSHOT_TIME_EAT', '00:10'),
+  leaderboardMonthlySnapshotTimeEat: getEnv('LEADERBOARD_MONTHLY_SNAPSHOT_TIME_EAT', '00:15'),
   accessTokenTtl: '2h' as const,
   refreshTokenTtl: '2h' as const,
   otpResendCooldownSeconds: 60,

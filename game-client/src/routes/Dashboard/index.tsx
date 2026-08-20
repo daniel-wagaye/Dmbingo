@@ -8,6 +8,7 @@ import RegisterContact from '../Auth/RegisterContact';
 import LanguageToggle from '../../components/LanguageToggle';
 import EditNameModal from '../../components/EditNameModal';
 import HistoryModal from '../History';
+import LeaderboardModal from '../Leaderboard';
 import CouponModal from '../../components/CouponModal';
 import DepositModal from '../Deposit';
 import WithdrawModal from '../Withdraw';
@@ -29,6 +30,7 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
   const { handleRequestContact } = RegisterContact({ onRegister });
   const [showEditName, setShowEditName] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showCoupon, setShowCoupon] = useState(false);
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
@@ -163,16 +165,33 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
             )}
           </div>
           {registered && (
-            <button
-              className="glass-pill history-btn"
-              onClick={() => handleProtectedAction(() => setShowHistory(true))}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
-              <span>{t('history')}</span>
-            </button>
+            <div className="profile-actions">
+              <button
+                className="glass-pill leaderboard-btn"
+                onClick={() => handleProtectedAction(() => setShowLeaderboard(true))}
+                aria-label={t('leaderboard')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                  <path d="M4 22h16"/>
+                  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+                  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+                  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+                </svg>
+                <span>{t('leaderboard')}</span>
+              </button>
+              <button
+                className="glass-pill history-btn"
+                onClick={() => handleProtectedAction(() => setShowHistory(true))}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>{t('history')}</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -267,6 +286,10 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
 
       {showHistory && (
         <HistoryModal onClose={() => setShowHistory(false)} />
+      )}
+
+      {showLeaderboard && (
+        <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
       )}
 
       {showCoupon && (

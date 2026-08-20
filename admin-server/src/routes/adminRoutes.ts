@@ -25,6 +25,7 @@ import {
   updateGameConfig,
   wakeUpGame,
 } from '../controllers/gameConfigController';
+import { updateLeaderboardSnapshots } from '../controllers/leaderboardSnapshotController';
 import {
   exportAdminCreditHistoryCsv,
   listAdminCreditHistory,
@@ -310,5 +311,6 @@ router.post('/game-config/update', adminAuth, updateGameConfig);
 router.post('/game-status/start', adminAuth, startGameStatus);
 router.post('/game-status/stop', adminAuth, stopGameStatus);
 router.post('/game-control/start', adminAuth, wakeUpGame);
+router.post('/leaderboard-snapshots/update', adminAuth, updateLeaderboardSnapshots);
 
 export default router;
