@@ -55,6 +55,7 @@ function AppRoutes() {
                 onRegister={doRegister}
                 onUserUpdate={updateUser}
                 onRefreshUser={refreshUser}
+                timeSync={timeSync}
               />
             </AuthGuard>
           }

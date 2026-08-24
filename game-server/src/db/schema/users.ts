@@ -1,4 +1,4 @@
-import { pgTable, bigint, varchar, text, numeric, integer, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, bigint, varchar, text, numeric, integer, timestamp, date, boolean } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   telegram_id: bigint('telegram_id', { mode: 'number' }).primaryKey(),
@@ -11,4 +11,9 @@ export const users = pgTable('users', {
   last_referred_date: timestamp('last_referred_date', { withTimezone: true }),
   language: text('language').default('am'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  streak_count: integer('streak_count').default(0),
+  last_play_date: date('last_play_date'),
+  streak_bonus_5_received: boolean('streak_bonus_5_received').notNull().default(false),
+  streak_bonus_10_received: boolean('streak_bonus_10_received').notNull().default(false),
+  streak_bonus_30_received: boolean('streak_bonus_30_received').notNull().default(false),
 });

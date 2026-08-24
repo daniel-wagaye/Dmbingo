@@ -96,6 +96,46 @@
   font-size: 11px;
 }
 
+/* Streak pill — compact so the header stays readable on mobile */
+.streak-btn {
+  gap: 4px;
+  padding: 6px 11px;
+  border-color: rgba(0, 242, 255, 0.28);
+}
+
+.streak-btn:hover {
+  border-color: rgba(0, 242, 255, 0.5);
+  box-shadow: 0 0 12px rgba(0, 242, 255, 0.16);
+}
+
+.streak-btn-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.streak-btn-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Bonus day: gold with a stronger glow */
+.streak-btn-bonus {
+  border-color: rgba(255, 210, 74, 0.65);
+  background: rgba(255, 200, 60, 0.14);
+  box-shadow: 0 0 16px rgba(255, 200, 60, 0.3);
+}
+
+.streak-btn-bonus:hover {
+  background: rgba(255, 200, 60, 0.22);
+  border-color: rgba(255, 210, 74, 0.9);
+  box-shadow: 0 0 22px rgba(255, 200, 60, 0.42);
+}
+
+.streak-btn-bonus .streak-btn-count {
+  color: #ffd24a;
+}
+
 .invite-btn {
   border-color: rgba(255, 140, 0, 0.5);
   color: #ff8c00;
@@ -104,6 +144,26 @@
 .invite-btn:hover {
   border-color: rgba(255, 140, 0, 0.8);
   box-shadow: 0 0 12px rgba(255, 140, 0, 0.2);
+}
+
+/* The header now carries three pills, so tighten them on narrow phones instead of clipping. */
+@media (max-width: 360px) {
+  .dash-logo {
+    font-size: 19px;
+  }
+
+  .dash-header-actions {
+    gap: 6px;
+  }
+
+  .dash-header-actions .glass-pill {
+    padding: 6px 10px;
+  }
+
+  .lang-toggle {
+    min-width: 56px;
+    font-size: 10px;
+  }
 }
 
 /* ===== Profile & Wallet Box ===== */
@@ -155,6 +215,13 @@
 }
 
 .history-btn svg {
+  flex-shrink: 0;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
 }
 

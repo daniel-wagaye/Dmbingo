@@ -15,6 +15,16 @@ export interface TimeSync {
   perfAtFetch: number;
 }
 
+/**
+ * Current time according to the server, advanced by the monotonic clock since the last fetch.
+ * The device clock is only a fallback — it can be wrong by hours, which would corrupt any
+ * date-based decision.
+ */
+export function serverNowMs(timeSync: TimeSync | null): number {
+  if (!timeSync) return Date.now();
+  return timeSync.serverTimeMs + (performance.now() - timeSync.perfAtFetch);
+}
+
 interface AuthState {
   user: User | null;
   registered: boolean;

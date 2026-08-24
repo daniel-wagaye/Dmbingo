@@ -11,6 +11,12 @@ export interface User {
   last_referred_date: string | null;
   language: string;
   created_at: string;
+  streak_count: number;
+  /** `YYYY-MM-DD` in EAT, or null if the player has never finished a game. */
+  last_play_date: string | null;
+  streak_bonus_5_received: boolean;
+  streak_bonus_10_received: boolean;
+  streak_bonus_30_received: boolean;
 }
 
 export interface UserResponse extends User {

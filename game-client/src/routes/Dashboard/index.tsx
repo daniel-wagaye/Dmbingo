@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
@@ -14,6 +14,9 @@ import DepositModal from '../Deposit';
 import WithdrawModal from '../Withdraw';
 import TransferModal from '../Transfer';
 import SupportModal from '../Support';
+import StreakModal from '../Streak';
+import { deriveStreak, markShownOn, wasShownOn } from '../../utils/streak';
+import { serverNowMs, type TimeSync } from '../../hooks/useAuth';
 import './Dashboard.css';
 
 interface DashboardProps {
@@ -22,9 +25,10 @@ interface DashboardProps {
   onRegister: (contactRaw: string) => Promise<boolean>;
   onUserUpdate: (partial: Partial<User>) => void;
   onRefreshUser: () => Promise<void>;
+  timeSync: TimeSync | null;
 }
 
-export default function Dashboard({ user, registered, onRegister, onUserUpdate, onRefreshUser }: DashboardProps) {
+export default function Dashboard({ user, registered, onRegister, onUserUpdate, onRefreshUser, timeSync }: DashboardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { handleRequestContact } = RegisterContact({ onRegister });
@@ -36,6 +40,8 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const [showStreak, setShowStreak] = useState(false);
+  const [streakCelebrate, setStreakCelebrate] = useState(false);
   const [lang, setLang] = useState<'en' | 'am'>((user?.language as 'en' | 'am') || 'en');
   const autoPromptedRef = useRef(false);
   const [isNavigating, setIsNavigating] = useState(false);
@@ -51,8 +57,47 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Recomputed whenever fresh user data arrives — on mount, after a wallet change, and when
+  // the player returns from a game (Dashboard remounts and refetches). The EAT day comes from
+  // server time, so a wrong device clock cannot break the streak or the pop-ups.
+  const streakInfo = useMemo(() => deriveStreak(user, serverNowMs(timeSync)), [user, timeSync]);
+
+  // Two automatic openings per EAT day, each guarded by its own stored date:
+  // the daily reminder, and the bonus celebration for a milestone reached by today's game.
+  // When both are due at once a single modal covers them and stamps both markers.
+  useEffect(() => {
+    if (!registered || !user) return;
+    const telegramId = user.telegram_id;
+    const { today, isBonusDay } = streakInfo;
+
+    if (!wasShownOn('open', telegramId, today)) {
+      markShownOn('open', telegramId, today);
+      if (isBonusDay) markShownOn('bonus', telegramId, today);
+      setStreakCelebrate(isBonusDay);
+      setShowStreak(true);
+      return;
+    }
+
+    if (isBonusDay && !wasShownOn('bonus', telegramId, today)) {
+      markShownOn('bonus', telegramId, today);
+      setStreakCelebrate(true);
+      setShowStreak(true);
+    }
+  }, [registered, user, streakInfo]);
+
   const handleWalletChanged = () => {
     onRefreshUser();
+  };
+
+  // Manual openings never touch the automatic-popup markers and never fire confetti.
+  const handleOpenStreak = () => {
+    setStreakCelebrate(false);
+    setShowStreak(true);
+  };
+
+  const handleCloseStreak = () => {
+    setShowStreak(false);
+    setStreakCelebrate(false);
   };
 
   const handlePlay = useCallback(async () => {
@@ -127,6 +172,18 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
       <header className="dash-header">
         <div className="dash-logo">DM Bingo</div>
         <div className="dash-header-actions">
+          {registered && (
+            <button
+              className={`glass-pill streak-btn${streakInfo.isBonusDay ? ' streak-btn-bonus' : ''}`}
+              onClick={handleOpenStreak}
+              aria-label={t('streak_title')}
+            >
+              <span className="streak-btn-icon" aria-hidden="true">
+                {streakInfo.isBonusDay ? '🏆' : '🔥'}
+              </span>
+              <span className="streak-btn-count">{streakInfo.streak}</span>
+            </button>
+          )}
           {registered && (
             <LanguageToggle
               currentLang={lang}
@@ -327,6 +384,14 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
         <SupportModal
           telegramId={user?.telegram_id ?? null}
           onClose={() => setShowSupport(false)}
+        />
+      )}
+
+      {showStreak && registered && (
+        <StreakModal
+          info={streakInfo}
+          celebrate={streakCelebrate}
+          onClose={handleCloseStreak}
         />
       )}
     </div>
