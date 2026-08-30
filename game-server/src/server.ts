@@ -6,6 +6,8 @@ import { config } from './config';
 import app from './app';
 import { GameRoom, activeRoom } from './colyseus/GameRoom';
 import { callRecoverGameState } from './services/gameService';
+import { settleWinnersFromDisk } from './services/crashWinnerRecovery';
+import { pruneWinnerFilesBelow } from './services/winnerRecoveryStore';
 import { schedulePickingTimer } from './jobs/scheduler';
 import { startBotPicksForGame, stopBotPicks } from './jobs/botManager';
 import { startCleanupCron } from './jobs/cleanupCron';
@@ -84,11 +86,18 @@ async function initializeAndRecover(): Promise<void> {
   for (let attempt = 1; attempt <= config.maxRecoveryRetries; attempt++) {
     try {
       console.log(`[recovery] Running crash recovery (attempt ${attempt})...`);
+
+      // Pay out first if the process died between winner detection and finalize_game.
+      // This leaves the game in winner_reveal, which recover_game_state already knows how to
+      // finish; in every other case it does nothing and recovery proceeds unchanged.
+      const settled = await settleWinnersFromDisk();
+
       const result = await callRecoverGameState();
       console.log('[recovery] Result:', result);
 
+      // A settled game already announced its own winners with the crash-specific message.
       // Send Telegram messages to winners (fire-and-forget)
-      if (result?.action === 'credited_winners' && result?.winners?.length > 0) {
+      if (!settled.settled && result?.action === 'credited_winners' && result?.winners?.length > 0) {
         sendWinnerNotifications(result.winners).catch((e) =>
           console.error('[recovery] Winner notification batch failed:', e)
         );
@@ -135,6 +144,14 @@ async function initializeAndRecover(): Promise<void> {
         minBotAmount: result?.min_bot_amount,
         maxBotAmount: result?.max_bot_amount,
       });
+
+      // Any record left for an older game can no longer be acted on. Bounded one-off sweep.
+      const liveGameId = Number(result?.new_game_id ?? result?.game_id ?? 0);
+      if (liveGameId > 0) {
+        pruneWinnerFilesBelow(liveGameId).catch((e) =>
+          console.error('[recovery] Winner file prune failed:', e)
+        );
+      }
 
       return; // success
     } catch (err) {

@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config();
 
 const REQUIRED_ENV = ['DATABASE_URL', 'BOT_TOKEN', 'GAME_SECRET'] as const;
@@ -56,6 +57,11 @@ export const config = {
   winnerAcceptanceWindowMs: parseInt(process.env.WINNER_ACCEPTANCE_WINDOW_MS || '1000', 10),
   winnerRevealDurationMs: parseInt(process.env.WINNER_REVEAL_DURATION_MS || '10000', 10),
   maxRecoveryRetries: parseInt(process.env.MAX_RECOVERY_RETRIES || '5', 10),
+  // Local SSD directory holding detected-winner snapshots until finalize_game commits them.
+  // Anchored to the package root so it does not move with the process working directory.
+  winnerRecoveryDir:
+    process.env.WINNER_RECOVERY_DIR?.trim() ||
+    path.resolve(__dirname, '..', '..', 'data', 'winner-recovery'),
   dbMaxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || '23', 10),
   dbIdleTimeoutSeconds: parseInt(process.env.DB_IDLE_TIMEOUT_SECONDS || '30', 10),
   dbConnectTimeoutSeconds: parseInt(process.env.DB_CONNECT_TIMEOUT_SECONDS || '30', 10),

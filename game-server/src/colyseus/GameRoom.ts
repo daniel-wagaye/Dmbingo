@@ -122,4 +122,15 @@ export class GameRoom extends Room<{ state: GameState }> {
     });
     return ids;
   }
+
+  /** Winner board plus its owner, the shape the crash-recovery snapshot stores on disk. */
+  public getWinnerEntries(): Array<{ telegram_id: number; board_id: number }> {
+    const entries: Array<{ telegram_id: number; board_id: number }> = [];
+    this.state.picks.forEach((pick, key) => {
+      if (pick.winner) {
+        entries.push({ telegram_id: Number(pick.telegramId), board_id: Number(key) });
+      }
+    });
+    return entries;
+  }
 }

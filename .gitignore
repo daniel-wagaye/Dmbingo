@@ -2,6 +2,9 @@
 Thumbs.db
 **/node_modules/
 **/dist/
+
+# Runtime winner snapshots written to the server SSD
+game-server/data/
 **/.env
 **/.env.local
 **/.env.*.local
@@ -12,6 +15,7 @@ dmbingo-support-bot/.env.example
 PG functions/
 admin-prompt/
 game prompt/
+some-additional-prompts/
 Bingo Game.txt
 Game.txt
 README.md

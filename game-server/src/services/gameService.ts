@@ -46,6 +46,83 @@ export async function getLatestGame(): Promise<any | null> {
   }, 'get_latest_game');
 }
 
+// ── Crash-recovery support (used only on startup) ──
+
+export interface GamePickRow {
+  board_id: number;
+  telegram_id: number;
+  winner_name: string;
+}
+
+/** Everyone who played a game, read before recovery so no participant is lost. */
+export async function getPlayerPicksForGame(gameId: number): Promise<GamePickRow[]> {
+  return queryWithRetry(async () => {
+    const rows = await gameSql`
+      SELECT board_id, telegram_id, COALESCE(winner_name, '') AS winner_name
+      FROM player_picks
+      WHERE game_id = ${gameId}::bigint AND telegram_id IS NOT NULL
+      ORDER BY board_id
+    `;
+    return rows.map((r: any) => ({
+      board_id: Number(r.board_id),
+      telegram_id: Number(r.telegram_id),
+      winner_name: String(r.winner_name ?? ''),
+    }));
+  }, 'get_player_picks_for_game');
+}
+
+export interface CreditedWinnerRow {
+  telegram_id: number;
+  board_id: number;
+  credited_amount: string;
+}
+
+/**
+ * The amounts finalize_game actually credited. Reading them back beats recomputing the
+ * cent-splitting rules in JS, which would drift the moment the PG function changes.
+ */
+export async function getCreditedWinners(gameId: number): Promise<CreditedWinnerRow[]> {
+  return queryWithRetry(async () => {
+    const rows = await gameSql`
+      SELECT telegram_id, board_id, credited_amount
+      FROM winners_history
+      WHERE game_id = ${gameId}::bigint
+      ORDER BY board_id
+    `;
+    return rows.map((r: any) => ({
+      telegram_id: Number(r.telegram_id),
+      board_id: Number(r.board_id),
+      credited_amount: Number(r.credited_amount ?? 0).toFixed(2),
+    }));
+  }, 'get_credited_winners');
+}
+
+export interface ErrorDocumentRow {
+  game_id: number;
+  telegram_id: number;
+  stake: string;
+  board_id: number;
+  winner: boolean;
+}
+
+/** Single multi-row insert — one round trip regardless of how many boards were in play. */
+export async function insertErrorDocuments(rows: ErrorDocumentRow[]): Promise<number> {
+  if (rows.length === 0) return 0;
+  return queryWithRetry(async () => {
+    await gameSql`
+      INSERT INTO error_documents ${gameSql(
+        rows as any,
+        'game_id',
+        'telegram_id',
+        'stake',
+        'board_id',
+        'winner'
+      )}
+    `;
+    return rows.length;
+  }, 'insert_error_documents');
+}
+
 export async function getGameStatus(): Promise<string | null> {
   return queryWithRetry(async () => {
     const rows = await gameSql`SELECT status FROM game_status WHERE id = 1`;

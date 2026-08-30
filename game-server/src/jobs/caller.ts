@@ -7,6 +7,7 @@ import { schedulePickingTimer } from './scheduler';
 import { startBotPicksForGame } from './botManager';
 import { activeRoom } from '../colyseus/GameRoom';
 import { getBingoCard, hasBingoPattern } from '../services/bingoValidator';
+import { clearWinners, saveWinners } from '../services/winnerRecoveryStore';
 
 let callingInterval: ReturnType<typeof setInterval> | null = null;
 let activeGameId: number | null = null;
@@ -29,7 +30,34 @@ export function stopCallingLoop(): void {
   winnerDetected = false;
 }
 
+export function getActiveGameId(): number | null {
+  return activeGameId;
+}
+
+/** Game the winners belong to. `activeGameId` is authoritative; room state is the fallback. */
+function currentGameId(): number {
+  if (activeGameId) return activeGameId;
+  return activeRoom ? Number(activeRoom.state.gameId) : 0;
+}
+
+/**
+ * Snapshots every winner known right now to the SSD. Fire-and-forget: the store serializes
+ * and retries internally, and a disk problem must not delay the acceptance window.
+ */
+function persistWinnerSnapshot(): void {
+  if (!activeRoom) return;
+  const gameId = currentGameId();
+  if (!gameId) return;
+  const winners = activeRoom.getWinnerEntries();
+  if (winners.length === 0) return;
+  void saveWinners(gameId, winners);
+}
+
 export function onWinnerDetected(): void {
+  // Runs on every detection, not just the first, so winners that arrive later in the
+  // acceptance window are persisted too. Each write is a complete snapshot.
+  persistWinnerSnapshot();
+
   if (winnerDetected) return;
   winnerDetected = true;
 
@@ -47,11 +75,27 @@ export function onWinnerDetected(): void {
 }
 
 async function runFinalization(): Promise<void> {
+  // stopCallingLoop() clears activeGameId, so capture it while it is still set.
+  const gameId = currentGameId();
   try {
     const winnerBoardIds = activeRoom ? activeRoom.getWinnerBoardIds() : [];
-    console.log(`[caller] Finalizing game ${activeGameId}... winnerBoardIds=${JSON.stringify(winnerBoardIds)}`);
+    console.log(`[caller] Finalizing game ${gameId}... winnerBoardIds=${JSON.stringify(winnerBoardIds)}`);
+
+    // The file must describe exactly what is about to be finalized, so this last snapshot is
+    // awaited. saveWinners never throws — it logs and reports failure — so a bad disk delays
+    // finalization by at most three quick attempts instead of blocking the game.
+    if (gameId && winnerBoardIds.length > 0 && activeRoom) {
+      await saveWinners(gameId, activeRoom.getWinnerEntries());
+    }
+
     const result = await callFinalizeGame(winnerBoardIds);
     console.log('[caller] finalize_game result:', result);
+
+    // Payout is committed and the phase has moved past 'started', so the snapshot can no
+    // longer be replayed and is removed.
+    if (gameId && result?.success) {
+      void clearWinners(gameId);
+    }
 
     stopCallingLoop();
 
