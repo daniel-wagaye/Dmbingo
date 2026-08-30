@@ -56,6 +56,29 @@ const isRetryableDbError = (err: unknown): boolean => {
 };
 
 /**
+ * Retry budgets by how long the caller can afford to wait.
+ *
+ * `interactive` — a player is blocked on the response; fail fast so they can retry.
+ * `critical`    — game state transitions. Short burst only: the caller owns a persistent
+ *                 retry loop, so this must never block the event loop for minutes.
+ * `standard`    — everything else.
+ */
+export const RETRY_BUDGET = {
+  interactive: {
+    maxRetries: config.dbInteractiveMaxRetries,
+    baseDelayMs: config.dbInteractiveRetryBaseDelayMs,
+  },
+  critical: {
+    maxRetries: config.dbCriticalMaxRetries,
+    baseDelayMs: config.dbCriticalRetryBaseDelayMs,
+  },
+  standard: {
+    maxRetries: config.dbQueryMaxRetries,
+    baseDelayMs: config.dbRetryBaseDelayMs,
+  },
+} as const;
+
+/**
  * Retry a DB operation with configurable backoff.
  * @param flatDelay - if true, delay is constant (baseDelayMs every retry). If false, linear: baseDelayMs * attempt.
  * Non-retryable errors (like PG RAISE P0001) fail immediately.
@@ -63,8 +86,8 @@ const isRetryableDbError = (err: unknown): boolean => {
 export async function queryWithRetry<T>(
   operation: () => Promise<T>,
   label = 'db',
-  maxRetries = 30,
-  baseDelayMs = 300,
+  maxRetries = RETRY_BUDGET.standard.maxRetries,
+  baseDelayMs = RETRY_BUDGET.standard.baseDelayMs,
   flatDelay = false,
 ): Promise<T> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

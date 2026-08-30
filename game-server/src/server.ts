@@ -12,6 +12,8 @@ import { schedulePickingTimer } from './jobs/scheduler';
 import { startBotPicksForGame, stopBotPicks } from './jobs/botManager';
 import { startCleanupCron } from './jobs/cleanupCron';
 import { startHealthChecks } from './utils/health';
+import { raiseAlert, resolveAlert } from './services/alerter';
+import { errorText } from './jobs/criticalRetry';
 
 const PORT = config.port;
 const bot = new Telegraf(config.botToken);
@@ -49,6 +51,35 @@ gameServer.define('game_room', GameRoom);
 matchMaker.controller.DEFAULT_CORS_HEADERS['Access-Control-Allow-Headers'] =
   'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Telegram-Init-Data, X-Telegram-Contact-Raw';
 
+let roomCreated = false;
+
+async function ensureGameRoom(): Promise<void> {
+  if (roomCreated) return;
+  await matchMaker.createRoom('game_room', {});
+  roomCreated = true;
+  console.log('[colyseus] Game room pre-created, activeRoom:', !!activeRoom);
+
+  for (let i = 0; i < 20 && !activeRoom; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (!activeRoom) {
+    console.error('[colyseus] FATAL: activeRoom not set after createRoom');
+    raiseAlert('colyseus_room', 'Game room failed to become active after createRoom');
+  }
+}
+
+function parkInMaintenance(): void {
+  stopBotPicks();
+  if (activeRoom) {
+    activeRoom.setNewGame({
+      phase: 'maintenance',
+      picking_ends_at: null,
+      stake_amount: 0,
+      minimum_player: 0,
+    });
+  }
+}
+
 async function sendWinnerNotifications(winners: any[]): Promise<void> {
   for (const w of winners) {
     try {
@@ -70,19 +101,8 @@ async function sendWinnerNotifications(winners: any[]): Promise<void> {
 }
 
 async function initializeAndRecover(): Promise<void> {
-  // Pre-create the room so activeRoom is set before any client connects
-  await matchMaker.createRoom('game_room', {});
-  console.log('[colyseus] Game room pre-created, activeRoom:', !!activeRoom);
+  await ensureGameRoom();
 
-  // Wait for activeRoom to be set (onCreate is async in matchMaker)
-  for (let i = 0; i < 20 && !activeRoom; i++) {
-    await new Promise(r => setTimeout(r, 100));
-  }
-  if (!activeRoom) {
-    console.error('[colyseus] FATAL: activeRoom not set after createRoom');
-  }
-
-  // Run crash recovery
   for (let attempt = 1; attempt <= config.maxRecoveryRetries; attempt++) {
     try {
       console.log(`[recovery] Running crash recovery (attempt ${attempt})...`);
@@ -92,18 +112,25 @@ async function initializeAndRecover(): Promise<void> {
       // finish; in every other case it does nothing and recovery proceeds unchanged.
       const settled = await settleWinnersFromDisk();
 
+      if (settled.blocked) {
+        raiseAlert(
+          `settle:${settled.gameId ?? 'unknown'}`,
+          `Could not settle winners from disk for game ${settled.gameId}`,
+          { operation: 'settleWinnersFromDisk', game_id: settled.gameId, attempt }
+        );
+        throw new Error('WINNER_SETTLE_BLOCKED');
+      }
+
       const result = await callRecoverGameState();
       console.log('[recovery] Result:', result);
 
       // A settled game already announced its own winners with the crash-specific message.
-      // Send Telegram messages to winners (fire-and-forget)
       if (!settled.settled && result?.action === 'credited_winners' && result?.winners?.length > 0) {
         sendWinnerNotifications(result.winners).catch((e) =>
           console.error('[recovery] Winner notification batch failed:', e)
         );
       }
 
-      // Set room state from recovery return values (no extra DB query)
       console.log('[recovery] activeRoom exists:', !!activeRoom);
       console.log('[recovery] Result fields:', {
         new_game_phase: result?.new_game_phase,
@@ -128,13 +155,11 @@ async function initializeAndRecover(): Promise<void> {
         });
       }
 
-      // Schedule picking timer using return value directly (no getLatestGame query)
       const newPhase = result?.new_game_phase;
       if (newPhase === 'picking' && result?.picking_ends_at) {
         const delay = new Date(result.picking_ends_at).getTime() - Date.now();
         schedulePickingTimer(Math.max(delay, 0));
       }
-      // maintenance or other phases → no timers needed
 
       startBotPicksForGame({
         gameId: result?.new_game_id ? Number(result.new_game_id) : 0,
@@ -145,7 +170,6 @@ async function initializeAndRecover(): Promise<void> {
         maxBotAmount: result?.max_bot_amount,
       });
 
-      // Any record left for an older game can no longer be acted on. Bounded one-off sweep.
       const liveGameId = Number(result?.new_game_id ?? result?.game_id ?? 0);
       if (liveGameId > 0) {
         pruneWinnerFilesBelow(liveGameId).catch((e) =>
@@ -153,19 +177,25 @@ async function initializeAndRecover(): Promise<void> {
         );
       }
 
-      return; // success
+      resolveAlert('recovery', 'Crash recovery succeeded', {
+        action: result?.action,
+        new_game_id: result?.new_game_id,
+        phase: newPhase ?? result?.phase,
+      });
+      if (settled.gameId) {
+        resolveAlert(`settle:${settled.gameId}`, `Winner settle succeeded for game ${settled.gameId}`);
+      }
+      return;
     } catch (err) {
       console.error(`[recovery] Attempt ${attempt} failed:`, err);
+      raiseAlert('recovery', 'Crash recovery failed', {
+        operation: 'recover_game_state',
+        attempt,
+        max_attempts: config.maxRecoveryRetries,
+        error: errorText(err),
+      });
       if (attempt >= config.maxRecoveryRetries) {
-        stopBotPicks();
-        if (activeRoom) {
-          activeRoom.setNewGame({
-            phase: 'maintenance',
-            picking_ends_at: null,
-            stake_amount: 0,
-            minimum_player: 0,
-          });
-        }
+        parkInMaintenance();
         return;
       }
       await new Promise((r) => setTimeout(r, 2000));
@@ -188,33 +218,46 @@ function scheduleRecoveryRetry(): void {
   }, 30000);
 }
 
-// Global safety nets — prevent unhandled errors from crashing the process
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] Uncaught exception (process kept alive):', err);
+  raiseAlert('uncaught_exception', 'Uncaught exception — process kept alive', {
+    error: errorText(err),
+  });
 });
 process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] Unhandled rejection (process kept alive):', reason);
+  raiseAlert('unhandled_rejection', 'Unhandled rejection — process kept alive', {
+    error: errorText(reason),
+  });
 });
 
-initializeAndRecover()
-  .then(async () => {
-    await gameServer.listen(PORT);
+async function boot(): Promise<void> {
+  await gameServer.listen(PORT);
+  console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
+  startCleanupCron();
+  startHealthChecks();
+
+  await ensureGameRoom();
+  parkInMaintenance();
+
+  await initializeAndRecover();
+  if (activeRoom?.state.phase === 'maintenance') {
+    scheduleRecoveryRetry();
+  }
+}
+
+boot().catch((err) => {
+  console.error('[recovery] Unexpected startup failure. Continuing in degraded mode.', err);
+  raiseAlert('startup', 'Unexpected startup failure — running in degraded mode', {
+    error: errorText(err),
+  });
+  gameServer.listen(PORT).then(() => {
     console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
     startCleanupCron();
     startHealthChecks();
-    if (activeRoom?.state.phase === 'maintenance') {
-      scheduleRecoveryRetry();
-    }
-  })
-  .catch((err) => {
-    console.error('[recovery] Unexpected startup failure. Continuing in degraded mode.', err);
-    gameServer.listen(PORT).then(() => {
-      console.log(`[game-server] Express + Colyseus running on http://localhost:${PORT}`);
-      startCleanupCron();
-      startHealthChecks();
-      scheduleRecoveryRetry();
-    }).catch((listenErr) => {
-      console.error('[startup] Failed to bind server:', listenErr);
-      process.exit(1);
-    });
+    scheduleRecoveryRetry();
+  }).catch((listenErr) => {
+    console.error('[startup] Failed to bind server:', listenErr);
+    process.exit(1);
   });
+});

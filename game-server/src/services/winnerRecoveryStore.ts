@@ -2,6 +2,7 @@ import fsp from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import { config } from '../config';
+import { raiseAlert } from './alerter';
 
 /**
  * Durable record of the winners detected for a game, written to the local SSD the moment a
@@ -164,6 +165,16 @@ export function saveWinners(gameId: number, winners: StoredWinner[]): Promise<bo
               game_id: record.game_id,
               winners: record.winners,
               path: fileFor(record.game_id),
+              error: err instanceof Error ? err.message : String(err),
+            }
+          );
+          raiseAlert(
+            `winner_store:${record.game_id}`,
+            `Winner snapshot NOT persisted for game ${record.game_id}`,
+            {
+              operation: 'saveWinners',
+              game_id: record.game_id,
+              winners: record.winners,
               error: err instanceof Error ? err.message : String(err),
             }
           );

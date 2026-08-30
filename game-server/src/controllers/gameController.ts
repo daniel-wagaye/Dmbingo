@@ -114,8 +114,10 @@ export async function claimBingo(req: Request, res: Response): Promise<void> {
 
     const state = activeRoom.state;
 
-    // Must be in started phase with calling active
-    if (state.phase !== 'started' || !state.callingStarted) {
+    // Must be in started phase with calling active. Once payout has started, extra
+    // claims would race the locked winner list, so they are ignored.
+    const { isFinalizing, onWinnerDetected } = await import('../jobs/caller');
+    if (state.phase !== 'started' || !state.callingStarted || isFinalizing()) {
       res.status(200).json({ action: 'no_bingo' });
       return;
     }
@@ -162,8 +164,6 @@ export async function claimBingo(req: Request, res: Response): Promise<void> {
       activeRoom.updatePick(wb, telegramId, true, winnerName);
     }
 
-    // Trigger winner acceptance window (stops calling, starts finalization timer)
-    const { onWinnerDetected } = await import('../jobs/caller');
     onWinnerDetected();
 
     res.status(200).json({

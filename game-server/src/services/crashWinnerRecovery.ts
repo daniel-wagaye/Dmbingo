@@ -25,10 +25,15 @@ import { sendCrashRecoveryMessages, type RecoveryWinner } from './crashRecoveryN
 export interface SettleOutcome {
   /** True only when a crashed game was paid out from the SSD record. */
   settled: boolean;
+  /**
+   * Winners were on disk but finalize_game did not commit. The caller must NOT run
+   * recover_game_state — that path refunds a started game with no winner rows.
+   */
+  blocked: boolean;
   gameId: number | null;
 }
 
-const NOTHING_TO_SETTLE: SettleOutcome = { settled: false, gameId: null };
+const NOTHING_TO_SETTLE: SettleOutcome = { settled: false, blocked: false, gameId: null };
 
 export async function settleWinnersFromDisk(): Promise<SettleOutcome> {
   const game = await getLatestGame();
@@ -37,7 +42,7 @@ export async function settleWinnersFromDisk(): Promise<SettleOutcome> {
   const gameId = Number(game.game_id);
   // Only a game still marked 'started' can have an unfinalized payout. Anything else has
   // already passed finalize_game, so a leftover file must never be replayed.
-  if (game.phase !== 'started') return { settled: false, gameId };
+  if (game.phase !== 'started') return { settled: false, blocked: false, gameId };
 
   const record = await readWinners(gameId);
   if (!record) {
@@ -45,7 +50,7 @@ export async function settleWinnersFromDisk(): Promise<SettleOutcome> {
       `[crashWinners] Game ${gameId} was interrupted while running with no winner on disk. ` +
         'Standard recovery will refund the players.'
     );
-    return { settled: false, gameId };
+    return { settled: false, blocked: false, gameId };
   }
 
   const boardIds = record.winners.map((w) => w.board_id);
@@ -63,14 +68,15 @@ export async function settleWinnersFromDisk(): Promise<SettleOutcome> {
     console.error(`[crashWinners] Could not read player_picks for game ${gameId}:`, err);
   }
 
-  // Same 30-retry wrapper the live finalization path uses.
+  // Same inner burst the live finalization path uses. Failure here must not fall through
+  // to recover_game_state, which would refund the players and erase the win.
   const result = await callFinalizeGame(boardIds);
   if (!result?.success) {
     console.error(
-      `[crashWinners] finalize_game refused game ${gameId}. Handing over to standard recovery.`,
+      `[crashWinners] finalize_game refused game ${gameId}. Blocking refund recovery until it succeeds.`,
       result
     );
-    return { settled: false, gameId };
+    return { settled: false, blocked: true, gameId };
   }
   console.log(`[crashWinners] finalize_game result for game ${gameId}:`, result);
 
@@ -80,7 +86,7 @@ export async function settleWinnersFromDisk(): Promise<SettleOutcome> {
 
   await clearWinners(gameId);
 
-  return { settled: true, gameId };
+  return { settled: true, blocked: false, gameId };
 }
 
 async function documentAndNotify(

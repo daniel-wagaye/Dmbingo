@@ -1,49 +1,84 @@
-import { gameSql, queryWithRetry } from '../db/drizzle';
+import { gameSql, queryWithRetry, RETRY_BUDGET } from '../db/drizzle';
 
 // ── Game pool operations (picks, claims, transitions) ──
-// All critical PG functions wrapped with queryWithRetry (30 retries, 300ms base delay)
+// Budgets are chosen per call site: see RETRY_BUDGET in db/drizzle.ts. The game-critical
+// transitions get a short burst only — their callers own a persistent retry loop that keeps
+// trying indefinitely without blocking the event loop.
+
+const INTERACTIVE = RETRY_BUDGET.interactive;
+const CRITICAL = RETRY_BUDGET.critical;
 
 export async function callPickBoard(telegramId: number, boardId: number): Promise<any> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT pick_board(${telegramId}::bigint, ${boardId}::smallint) AS result`;
-    return rows[0]?.result;
-  }, 'pick_board');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT pick_board(${telegramId}::bigint, ${boardId}::smallint) AS result`;
+      return rows[0]?.result;
+    },
+    'pick_board',
+    INTERACTIVE.maxRetries,
+    INTERACTIVE.baseDelayMs
+  );
 }
 
 export async function callTransitionPicking(): Promise<any> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT transition_picking() AS result`;
-    return rows[0]?.result;
-  }, 'transition_picking');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT transition_picking() AS result`;
+      return rows[0]?.result;
+    },
+    'transition_picking',
+    CRITICAL.maxRetries,
+    CRITICAL.baseDelayMs
+  );
 }
 
 export async function callFinalizeGame(winnerBoardIds?: number[]): Promise<any> {
   const ids = winnerBoardIds && winnerBoardIds.length > 0 ? winnerBoardIds : null;
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT finalize_game(${ids}::smallint[]) AS result`;
-    return rows[0]?.result;
-  }, 'finalize_game');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT finalize_game(${ids}::smallint[]) AS result`;
+      return rows[0]?.result;
+    },
+    'finalize_game',
+    CRITICAL.maxRetries,
+    CRITICAL.baseDelayMs
+  );
 }
 
 export async function callCreateNextGame(): Promise<any> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT create_next_game() AS result`;
-    return rows[0]?.result ?? null;
-  }, 'create_next_game');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT create_next_game() AS result`;
+      return rows[0]?.result ?? null;
+    },
+    'create_next_game',
+    CRITICAL.maxRetries,
+    CRITICAL.baseDelayMs
+  );
 }
 
 export async function callRecoverGameState(): Promise<any> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT recover_game_state() AS result`;
-    return rows[0]?.result;
-  }, 'recover_game_state');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT recover_game_state() AS result`;
+      return rows[0]?.result;
+    },
+    'recover_game_state',
+    CRITICAL.maxRetries,
+    CRITICAL.baseDelayMs
+  );
 }
 
 export async function getLatestGame(): Promise<any | null> {
-  return queryWithRetry(async () => {
-    const rows = await gameSql`SELECT * FROM games ORDER BY game_id DESC LIMIT 1`;
-    return rows[0] ?? null;
-  }, 'get_latest_game');
+  return queryWithRetry(
+    async () => {
+      const rows = await gameSql`SELECT * FROM games ORDER BY game_id DESC LIMIT 1`;
+      return rows[0] ?? null;
+    },
+    'get_latest_game',
+    CRITICAL.maxRetries,
+    CRITICAL.baseDelayMs
+  );
 }
 
 // ── Crash-recovery support (used only on startup) ──
