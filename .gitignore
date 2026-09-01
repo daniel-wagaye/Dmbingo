@@ -8,7 +8,7 @@ game-server/data/
 **/.env
 **/.env.local
 **/.env.*.local
-**/.env.*.lightsail
+**/..env-lightsail
 dmbingo-support-bot/.env.example
 
 # Non-deployment files (prompts, docs, tools)
