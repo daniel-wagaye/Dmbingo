@@ -39,3 +39,6 @@ IMG_1483.PNG
 *.PNG
 *.png
 logs.txt
+admin-server/.env-lightsail
+game-server/.env-lightsail
+LIGHTSAIL-DEPLOY.md

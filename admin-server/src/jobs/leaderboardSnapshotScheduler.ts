@@ -59,6 +59,11 @@ const DAY_MATCHERS: Record<SnapshotPeriod, (eatDay: Date) => boolean> = {
   monthly: (eatDay) => eatDay.getUTCDate() === 1,
 };
 
+// Node setTimeout delays are 32-bit signed ints (max ~24.8 days). Monthly can be ~31
+// days away; a larger delay is clamped to 1ms and the job would spin. Sleep in 1-day
+// chunks and only run the snapshot once the real target is due.
+const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
 const scheduleTimes = (): Record<SnapshotPeriod, { hour: number; minute: number }> => ({
   daily: parseHhMm(config.leaderboardDailySnapshotTimeEat, 0, 5),
   weekly: parseHhMm(config.leaderboardWeeklySnapshotTimeEat, 0, 10),
@@ -76,13 +81,25 @@ export const startLeaderboardSnapshotRuntime = (): LeaderboardSnapshotRuntime =>
 
   const schedule = (period: SnapshotPeriod) => {
     const { hour, minute } = times[period];
-    const delayMs = Math.max(nextEatRunMs(Date.now(), hour, minute, DAY_MATCHERS[period]) - Date.now(), 0);
+    const targetMs = nextEatRunMs(Date.now(), hour, minute, DAY_MATCHERS[period]);
+    const remainingMs = Math.max(targetMs - Date.now(), 0);
+    const waitMs = Math.min(remainingMs, MAX_TIMEOUT_MS);
     process.stdout.write(
-      `[leaderboardSnapshot] Next ${period} snapshot in ${Math.round(delayMs / 60000)}min ` +
-        `(${new Date(Date.now() + delayMs).toISOString()})\n`
+      `[leaderboardSnapshot] Next ${period} snapshot in ${Math.round(remainingMs / 60000)}min ` +
+        `(${new Date(targetMs).toISOString()})` +
+        (waitMs < remainingMs ? `; waking in ${Math.round(waitMs / 60000)}min` : '') +
+        `\n`
     );
 
     const timer = setTimeout(() => {
+      const index = timers.indexOf(timer);
+      if (index >= 0) timers.splice(index, 1);
+
+      if (Date.now() < targetMs) {
+        schedule(period);
+        return;
+      }
+
       void syncOneSnapshot(period)
         .then((result) => {
           process.stdout.write(`[leaderboardSnapshot] ${describe(result)}\n`);
@@ -91,11 +108,9 @@ export const startLeaderboardSnapshotRuntime = (): LeaderboardSnapshotRuntime =>
           process.stderr.write(`[leaderboardSnapshot] ${period} run threw: ${String(error)}\n`);
         })
         .finally(() => {
-          const index = timers.indexOf(timer);
-          if (index >= 0) timers.splice(index, 1);
           schedule(period);
         });
-    }, delayMs);
+    }, waitMs);
 
     timers.push(timer);
   };
@@ -124,4 +139,4 @@ export const stopLeaderboardSnapshotRuntime = (runtime: LeaderboardSnapshotRunti
 };
 
 // Exported for tests / diagnostics.
-export const __internals = { nextEatRunMs, parseHhMm, DAY_MATCHERS };
+export const __internals = { nextEatRunMs, parseHhMm, DAY_MATCHERS, MAX_TIMEOUT_MS };
