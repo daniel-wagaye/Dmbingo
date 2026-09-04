@@ -7,6 +7,12 @@ type GameConfig = {
   referral_amount: string;
   referral_monthly_limit: number;
   registration_bonus: string;
+  bot_status: string | null;
+  max_bot_amount: number | null;
+  min_bot_amount: number | null;
+  streak_bonus_5_days: string;
+  streak_bonus_10_days: string;
+  streak_bonus_30_days: string;
   last_updated: string;
 };
 
@@ -49,11 +55,17 @@ export const updateGameConfigField = async (payload: {
     | 'minimum_player'
     | 'referral_amount'
     | 'referral_monthly_limit'
-    | 'registration_bonus';
-  value: number;
+    | 'registration_bonus'
+    | 'bot_status'
+    | 'max_bot_amount'
+    | 'min_bot_amount'
+    | 'streak_bonus_5_days'
+    | 'streak_bonus_10_days'
+    | 'streak_bonus_30_days';
+  value: number | string;
   actionPassword: string;
 }) =>
-  request<{ status: 'ok'; value?: number }>('/admin/game-config/update', {
+  request<{ status: 'ok'; value?: number | string }>('/admin/game-config/update', {
     method: 'POST',
     body: JSON.stringify(payload),
   });

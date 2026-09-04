@@ -16,6 +16,12 @@ type GameConfigData = {
   referral_amount: string;
   referral_monthly_limit: number;
   registration_bonus: string;
+  bot_status: string | null;
+  max_bot_amount: number | null;
+  min_bot_amount: number | null;
+  streak_bonus_5_days: string;
+  streak_bonus_10_days: string;
+  streak_bonus_30_days: string;
   last_updated: string;
 };
 
@@ -30,7 +36,13 @@ type ConfigField =
   | 'minimum_player'
   | 'referral_amount'
   | 'referral_monthly_limit'
-  | 'registration_bonus';
+  | 'registration_bonus'
+  | 'bot_status'
+  | 'max_bot_amount'
+  | 'min_bot_amount'
+  | 'streak_bonus_5_days'
+  | 'streak_bonus_10_days'
+  | 'streak_bonus_30_days';
 
 type ConfigCard = {
   field: ConfigField;
@@ -38,7 +50,11 @@ type ConfigCard = {
   description: string;
   value: string;
   successMessage: string;
+  input: 'integer' | 'money' | 'on_off';
 };
+
+const formatBotStatus = (value: string | null) =>
+  String(value ?? '').toLowerCase() === 'on' ? 'On' : 'Off';
 
 const toNumberString = (value: string | number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value ?? 0));
@@ -69,6 +85,7 @@ const GameConfig = () => {
         description: 'Amount required to join a round.',
         value: toNumberString(config.stake_amount),
         successMessage: 'successfully updated the stake amount.',
+        input: 'integer',
       },
       {
         field: 'picking_countdown_end_time',
@@ -76,6 +93,7 @@ const GameConfig = () => {
         description: 'Seconds before picking phase ends.',
         value: String(config.picking_countdown_end_time),
         successMessage: 'successfully updated the stake amount.',
+        input: 'integer',
       },
       {
         field: 'minimum_player',
@@ -83,6 +101,7 @@ const GameConfig = () => {
         description: 'Minimum players required to start.',
         value: String(config.minimum_player),
         successMessage: 'successfully updated the minimum player.',
+        input: 'integer',
       },
       {
         field: 'referral_amount',
@@ -90,6 +109,7 @@ const GameConfig = () => {
         description: 'Reward per referral.',
         value: toNumberString(config.referral_amount),
         successMessage: 'Successfully updated the referral amount.',
+        input: 'integer',
       },
       {
         field: 'referral_monthly_limit',
@@ -97,6 +117,7 @@ const GameConfig = () => {
         description: 'Max referral rewards per month.',
         value: String(config.referral_monthly_limit),
         successMessage: 'Successfully updated the referral monthly limit.',
+        input: 'integer',
       },
       {
         field: 'registration_bonus',
@@ -104,6 +125,55 @@ const GameConfig = () => {
         description: 'Bonus for new registrations.',
         value: toNumberString(config.registration_bonus),
         successMessage: 'Successfully updated the registration bonus.',
+        input: 'integer',
+      },
+      {
+        field: 'bot_status',
+        label: 'Bot Status',
+        description: 'Turn NPC bots on or off for new games.',
+        value: formatBotStatus(config.bot_status),
+        successMessage: 'Successfully updated bot status.',
+        input: 'on_off',
+      },
+      {
+        field: 'min_bot_amount',
+        label: 'Min Bots',
+        description: 'Minimum NPC bots scheduled in a picking round.',
+        value: String(config.min_bot_amount ?? 0),
+        successMessage: 'Successfully updated the minimum bot amount.',
+        input: 'integer',
+      },
+      {
+        field: 'max_bot_amount',
+        label: 'Max Bots',
+        description: 'Maximum NPC bots scheduled in a picking round (up to 100).',
+        value: String(config.max_bot_amount ?? 0),
+        successMessage: 'Successfully updated the maximum bot amount.',
+        input: 'integer',
+      },
+      {
+        field: 'streak_bonus_5_days',
+        label: '5-Day Streak Bonus',
+        description: 'Bonus credited after 5 consecutive play days.',
+        value: toNumberString(config.streak_bonus_5_days),
+        successMessage: 'Successfully updated the 5-day streak bonus.',
+        input: 'money',
+      },
+      {
+        field: 'streak_bonus_10_days',
+        label: '10-Day Streak Bonus',
+        description: 'Bonus credited after 10 consecutive play days.',
+        value: toNumberString(config.streak_bonus_10_days),
+        successMessage: 'Successfully updated the 10-day streak bonus.',
+        input: 'money',
+      },
+      {
+        field: 'streak_bonus_30_days',
+        label: '30-Day Streak Bonus',
+        description: 'Bonus credited after 30 consecutive play days.',
+        value: toNumberString(config.streak_bonus_30_days),
+        successMessage: 'Successfully updated the 30-day streak bonus.',
+        input: 'money',
       },
     ];
   }, [config]);
@@ -129,7 +199,11 @@ const GameConfig = () => {
   const openChangeModal = (field: ConfigField) => {
     setSelectedField(field);
     setActionPassword('');
-    setNewValue('');
+    if (field === 'bot_status') {
+      setNewValue(String(config?.bot_status ?? '').toLowerCase() === 'on' ? 'on' : 'off');
+    } else {
+      setNewValue('');
+    }
     setChangeOpen(true);
   };
 
@@ -155,19 +229,32 @@ const GameConfig = () => {
       toast.error('Enter action password.');
       return;
     }
-    const parsed = Number(newValue);
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      toast.error('Enter a whole number.');
-      return;
+    const card = cards.find((item) => item.field === selectedField);
+    let nextValue: number | string = newValue;
+    if (card?.input === 'on_off') {
+      if (newValue !== 'on' && newValue !== 'off') {
+        toast.error('Select on or off.');
+        return;
+      }
+    } else {
+      const parsed = Number(newValue);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast.error('Enter a number that is 0 or more.');
+        return;
+      }
+      if (card?.input === 'integer' && !Number.isInteger(parsed)) {
+        toast.error('Enter a whole number.');
+        return;
+      }
+      nextValue = parsed;
     }
     setActionLoading(true);
     try {
       await updateGameConfigField({
         field: selectedField,
-        value: parsed,
+        value: nextValue,
         actionPassword,
       });
-      const card = cards.find((item) => item.field === selectedField);
       if (card) toast.success(card.successMessage);
       closeChangeModal();
       loadConfig();
@@ -367,13 +454,29 @@ const GameConfig = () => {
               </div>
               <div className="modal-field">
                 <label htmlFor="configValue">New Value</label>
-                <input
-                  id="configValue"
-                  type="number"
-                  min="0"
-                  value={newValue}
-                  onChange={(event) => setNewValue(event.target.value)}
-                />
+                {cards.find((item) => item.field === selectedField)?.input === 'on_off' ? (
+                  <select
+                    id="configValue"
+                    value={newValue}
+                    onChange={(event) => setNewValue(event.target.value)}
+                  >
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                ) : (
+                  <input
+                    id="configValue"
+                    type="number"
+                    min="0"
+                    step={
+                      cards.find((item) => item.field === selectedField)?.input === 'money'
+                        ? '0.01'
+                        : '1'
+                    }
+                    value={newValue}
+                    onChange={(event) => setNewValue(event.target.value)}
+                  />
+                )}
               </div>
             </div>
             <div className="modal-actions">

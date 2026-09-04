@@ -27,6 +27,12 @@ export const gameConfig = pgTable('game_config', {
   referral_amount: numeric('referral_amount', { precision: 12, scale: 2 }).notNull().default('10'),
   referral_monthly_limit: integer('referral_monthly_limit').notNull().default(10),
   registration_bonus: numeric('registration_bonus', { precision: 12, scale: 2 }).notNull().default('10'),
+  bot_status: text('bot_status').default('on'),
+  min_bot_amount: integer('min_bot_amount').default(10),
+  max_bot_amount: integer('max_bot_amount').default(30),
+  streak_bonus_5_days: numeric('streak_bonus_5_days', { precision: 12, scale: 2 }).notNull().default('20'),
+  streak_bonus_10_days: numeric('streak_bonus_10_days', { precision: 12, scale: 2 }).notNull().default('60'),
+  streak_bonus_30_days: numeric('streak_bonus_30_days', { precision: 12, scale: 2 }).notNull().default('200'),
   last_updated: timestamp('last_updated', { withTimezone: true }).defaultNow(),
 });
 
