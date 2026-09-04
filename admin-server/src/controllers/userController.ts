@@ -1,7 +1,11 @@
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 import { pool } from '../db/drizzle';
-import { sendUserTelegramText } from '../services/telegramNotifier';
+import {
+  sendDirectUserMessage,
+  sendUserTelegramText,
+  TelegramDeliveryError,
+} from '../services/telegramNotifier';
 
 type AdminPayload = { adminId: number; role: 'super_admin' | 'withdrawal_admin' };
 
@@ -224,4 +228,130 @@ export const creditUser = async (req: Request, res: Response) => {
   } finally {
     client.release();
   }
+};
+
+const TEXT_ONLY_MAX = 4096;
+const PHOTO_CAPTION_MAX = 1024;
+const MAX_IMAGE_BYTES = 700 * 1024;
+
+const decodeJpegBase64 = (raw: string): Buffer | null => {
+  const trimmed = raw.trim();
+  const comma = trimmed.indexOf(',');
+  const payload = trimmed.startsWith('data:') && comma >= 0 ? trimmed.slice(comma + 1) : trimmed;
+  if (!payload || payload.length > 1_200_000) {
+    return null;
+  }
+  try {
+    const buffer = Buffer.from(payload, 'base64');
+    if (buffer.length < 3 || buffer.length > MAX_IMAGE_BYTES) {
+      return null;
+    }
+    if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
+      return null;
+    }
+    return buffer;
+  } catch {
+    return null;
+  }
+};
+
+export const sendUserMessage = async (req: Request, res: Response) => {
+  const admin = (req as Request & { admin?: AdminPayload }).admin;
+  if (!admin) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  if (admin.role !== 'super_admin') {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  const { telegramId, text, actionPassword, imageBase64 } = req.body as {
+    telegramId?: number;
+    text?: string;
+    actionPassword?: string;
+    imageBase64?: string;
+  };
+
+  const telegram = Number(telegramId);
+  const messageText = typeof text === 'string' ? text.trim() : '';
+  const hasImage = typeof imageBase64 === 'string' && imageBase64.trim().length > 0;
+
+  if (!Number.isFinite(telegram) || telegram <= 0 || !actionPassword) {
+    return res.status(400).json({ error: 'missing_fields', message: 'Missing required fields.' });
+  }
+  if (!messageText && !hasImage) {
+    return res.status(400).json({
+      error: 'empty_message',
+      message: 'Enter a message or attach a photo.',
+    });
+  }
+
+  const maxText = hasImage ? PHOTO_CAPTION_MAX : TEXT_ONLY_MAX;
+  if (messageText.length > maxText) {
+    return res.status(400).json({
+      error: 'text_too_long',
+      message: hasImage
+        ? 'With a photo, the message can be at most 1024 characters.'
+        : 'Message can be at most 4096 characters.',
+    });
+  }
+
+  let imageJpeg: Buffer | undefined;
+  if (hasImage) {
+    const decoded = decodeJpegBase64(imageBase64!);
+    if (!decoded) {
+      return res.status(400).json({
+        error: 'invalid_image',
+        message: 'The photo is invalid or larger than 1 MB after compression.',
+      });
+    }
+    imageJpeg = decoded;
+  }
+
+  const adminResult = await pool.query(
+    `SELECT admin_id, action_password_hash FROM admins WHERE admin_id = $1`,
+    [admin.adminId]
+  );
+  if (!adminResult.rows.length) {
+    return res.status(404).json({ error: 'admin_not_found', message: 'Admin not found.' });
+  }
+
+  const actionHash = adminResult.rows[0].action_password_hash as string;
+  const passwordOk = await argon2.verify(actionHash, actionPassword);
+  if (!passwordOk) {
+    return res.status(401).json({ error: 'invalid_action_password', message: 'Incorrect action password.' });
+  }
+
+  const userResult = await pool.query(`SELECT telegram_id FROM users WHERE telegram_id = $1`, [telegram]);
+  if (!userResult.rows.length) {
+    return res.status(404).json({ error: 'user_not_found', message: 'User not found.' });
+  }
+
+  try {
+    await sendDirectUserMessage({
+      telegramId: telegram,
+      text: messageText || undefined,
+      imageJpeg,
+    });
+  } catch (error) {
+    if (error instanceof TelegramDeliveryError) {
+      return res.status(400).json({ error: error.reason, message: error.message });
+    }
+    const fallback = error instanceof Error ? error.message : 'Message failed.';
+    return res.status(500).json({ error: 'send_failed', message: fallback });
+  }
+
+  const details = JSON.stringify({
+    telegramId: telegram,
+    hasImage: Boolean(imageJpeg),
+    textLength: messageText.length,
+  });
+  await pool.query(
+    `INSERT INTO admin_actions (admin_id, action, target_id, target_type, details, ip_address, user_agent)
+     VALUES ($1, 'send_user_message', $2, 'user', $3::jsonb, $4, $5)`,
+    [admin.adminId, telegram, details, req.ip ?? null, req.get('user-agent') ?? null]
+  ).catch((error) => {
+    console.error('[sendUserMessage] admin_actions insert failed:', error);
+  });
+
+  return res.json({ status: 'ok' });
 };

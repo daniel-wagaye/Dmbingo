@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import TelegramIdCell from '../../components/TelegramIdCell';
 import UserDetailsModal from '../../components/UserDetailsModal';
+import SendUserMessageModal from '../../components/SendUserMessageModal';
 import { creditUser, fetchUsers } from '../../services/userService';
 
 type UserRow = {
@@ -30,6 +31,7 @@ const Users = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [creditOpen, setCreditOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const [actionPassword, setActionPassword] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
@@ -104,6 +106,15 @@ const Users = () => {
 
   const closeCredit = () => {
     setCreditOpen(false);
+  };
+
+  const openMessage = (user: UserRow) => {
+    setSelectedUser(user);
+    setMessageOpen(true);
+  };
+
+  const closeMessage = () => {
+    setMessageOpen(false);
   };
 
   const submitCredit = async () => {
@@ -223,13 +234,22 @@ const Users = () => {
                   <td>{row.referral_count}</td>
                   <td>{new Date(row.created_at).toLocaleString()}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => openCredit(row)}
-                    >
-                      Credit
-                    </button>
+                    <div className="action-stack">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => openCredit(row)}
+                      >
+                        Credit
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => openMessage(row)}
+                      >
+                        Message
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -321,6 +341,10 @@ const Users = () => {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {messageOpen && selectedUser ? (
+        <SendUserMessageModal user={selectedUser} onClose={closeMessage} />
       ) : null}
     </div>
   );

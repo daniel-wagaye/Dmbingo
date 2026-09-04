@@ -82,3 +82,14 @@ export const creditUser = async (payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+export const sendUserMessage = async (payload: {
+  telegramId: number;
+  text: string;
+  actionPassword: string;
+  imageBase64?: string;
+}) =>
+  request<{ status: 'ok' }>('/admin/users/message', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
