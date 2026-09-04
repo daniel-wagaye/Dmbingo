@@ -4,6 +4,7 @@ export const games = pgTable('games', {
   game_id: bigserial('game_id', { mode: 'number' }).primaryKey(),
   phase: text('phase').default('picking'),
   active_players: smallint('active_players').default(0),
+  real_p: smallint('real_p'),
   shuffled_nums: jsonb('shuffled_nums'),
   calling_started: boolean('calling_started').default(false),
   picking_ends_at: timestamp('picking_ends_at', { withTimezone: true }),

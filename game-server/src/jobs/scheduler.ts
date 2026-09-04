@@ -2,6 +2,7 @@ import { callTransitionPicking, getLatestGame } from '../services/gameService';
 import { startCallingLoop } from './caller';
 import { stopBotPicks } from './botManager';
 import { startStreakUpdate, collectPlayerTelegramIds } from '../services/streakService';
+import { startRecordHumanBoards } from '../services/realPlayerCount';
 import { activeRoom } from '../colyseus/GameRoom';
 import { raiseAlert, resolveAlert } from '../services/alerter';
 import { delayForAttempt, errorText } from './criticalRetry';
@@ -78,6 +79,7 @@ export function schedulePickingTimer(delayMs: number): void {
 
         // Background — never blocks the calling loop.
         startStreakUpdate(collectPlayerTelegramIds());
+        startRecordHumanBoards(result.game_id);
 
         startCallingLoop(result.game_id, result.shuffled_nums);
       }
