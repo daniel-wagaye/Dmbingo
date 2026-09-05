@@ -409,7 +409,7 @@ const GameConfig = () => {
       </div>
 
       <div className="gameconfig-cards">
-        {loading ? (
+        {loading && !config ? (
           <div className="gameconfig-empty">Loading...</div>
         ) : (
           cards.map((card) => (

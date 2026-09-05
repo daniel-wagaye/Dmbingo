@@ -60,7 +60,7 @@ const AdminManagment = () => {
         search: search.trim() || undefined,
         sortOrder,
       });
-      setRows(data.data);
+      setRows(Array.isArray(data.data) ? data.data : []);
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
@@ -301,7 +301,7 @@ const AdminManagment = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan={8} className="coupons-empty">
                   Loading...

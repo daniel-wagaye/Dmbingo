@@ -24,7 +24,7 @@ const ReportPage = () => {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
-      setRows(data.data);
+      setRows(Array.isArray(data.data) ? data.data : []);
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
@@ -116,7 +116,7 @@ const ReportPage = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && formattedRows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="coupons-empty">
                   Loading...

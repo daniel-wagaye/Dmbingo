@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="DM Bingo Admin">
+  <rect width="32" height="32" rx="8" fill="#0b0e14"/>
+  <text x="17" y="21" text-anchor="middle" font-family="Arial Black, Segoe UI, sans-serif" font-size="13" font-weight="800" fill="#ff7a18">DM</text>
+  <circle cx="7.2" cy="23.8" r="4.6" fill="#2ee6ff"/>
+  <circle cx="7.2" cy="23.8" r="3.2" fill="none" stroke="#ffffff" stroke-width="0.85"/>
+  <text x="7.2" y="26" text-anchor="middle" font-family="Arial Black, Segoe UI, sans-serif" font-size="5.6" font-weight="800" fill="#0b0e14">B</text>
+</svg>

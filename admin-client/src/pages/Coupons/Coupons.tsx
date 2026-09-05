@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import AnnounceCouponModal from '../../components/AnnounceCouponModal';
 import {
@@ -8,6 +8,7 @@ import {
   finishCoupon,
   sendCouponWinners,
 } from '../../services/couponService';
+import { listRows } from '../../utils/listRows';
 
 const CODE_REGEX = /^[A-Za-z0-9_-]{1,20}$/;
 
@@ -44,8 +45,10 @@ const Coupons = () => {
   const [creditWallet, setCreditWallet] = useState<'withdrawal' | 'non_withdrawal'>('non_withdrawal');
   const [actionPassword, setActionPassword] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const loadSeq = useRef(0);
 
   const loadCoupons = async (nextPage = page) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const data = await fetchCoupons({
@@ -55,14 +58,16 @@ const Coupons = () => {
         endDate: endDate || undefined,
         sortBy,
       });
-      setRows(data.data);
+      if (seq !== loadSeq.current) return;
+      setRows(listRows<CouponRow>(data.data));
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       const message = error instanceof Error ? error.message : 'Failed to load coupons';
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -158,7 +163,7 @@ const Coupons = () => {
       });
       toast.success('Coupon created and set to ACTIVE.');
       closeModals();
-      loadCoupons(1);
+      await loadCoupons(1);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Create failed';
       toast.error(message === 'invalid_action_password' ? 'Password incorrect.' : message);
@@ -185,7 +190,7 @@ const Coupons = () => {
           : 'Coupon marked as finished without notifying the group.'
       );
       closeModals();
-      loadCoupons(page);
+      await loadCoupons(page);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Finish failed';
       toast.error(message === 'invalid_action_password' ? 'Password incorrect.' : message);
@@ -205,7 +210,7 @@ const Coupons = () => {
       await sendCouponWinners(selected.coupon_id, { admin_password: actionPassword });
       toast.success('Winners list sent.');
       closeModals();
-      loadCoupons(page);
+      await loadCoupons(page);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Send failed';
       toast.error(
@@ -311,7 +316,7 @@ const Coupons = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan={12} className="coupons-empty">
                   Loading...
@@ -358,19 +363,15 @@ const Coupons = () => {
                         >
                           Announce
                         </button>
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => openSendWinners(row)}
-                          disabled={!canSendWinners}
-                          title={
-                            canSendWinners
-                              ? 'Send the winners CSV to the coupon group'
-                              : 'Active only when the coupon is finished and winners have not been sent'
-                          }
-                        >
-                          Send winners
-                        </button>
+                        {canSendWinners ? (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => openSendWinners(row)}
+                          >
+                            Send winners
+                          </button>
+                        ) : null}
                         {showFinish ? (
                           <button
                             type="button"
@@ -615,7 +616,7 @@ const Coupons = () => {
           onClose={closeModals}
           onSent={() => {
             closeModals();
-            loadCoupons(page);
+            void loadCoupons(page);
           }}
         />
       ) : null}

@@ -64,7 +64,7 @@ const Users = () => {
         sortBy,
         sortOrder,
       });
-      setRows(data.data);
+      setRows(Array.isArray(data.data) ? data.data : []);
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
@@ -210,7 +210,7 @@ const Users = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + 1} className="users-empty">
                   Loading...

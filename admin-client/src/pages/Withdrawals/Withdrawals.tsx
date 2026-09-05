@@ -92,7 +92,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
-      setRows(data.data);
+      setRows(Array.isArray(data.data) ? data.data : []);
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
@@ -278,7 +278,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + 1} className="withdrawals-empty">
                   Loading...

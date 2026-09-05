@@ -42,7 +42,7 @@ const DepositBankRegex = () => {
     setLoading(true);
     try {
       const data = await fetchRegexConfigs({ page: nextPage, search: query.trim() || undefined });
-      setRows(data.data);
+      setRows(Array.isArray(data.data) ? data.data : []);
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
@@ -341,7 +341,7 @@ const DepositBankRegex = () => {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="regex-empty">
                   Loading...
