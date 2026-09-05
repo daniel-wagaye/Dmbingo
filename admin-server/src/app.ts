@@ -3,6 +3,7 @@ import cors from 'cors';
 import express, { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import { config } from './config';
+import couponWebhookRoutes from './routes/couponWebhookRoutes';
 import adminRoutes from './routes/adminRoutes';
 import authRoutes from './routes/authRoutes';
 
@@ -49,6 +50,8 @@ export const markRuntimeDegraded = (reason: string, restartAttempts: number) => 
   runtimeHealth.updatedAt = new Date().toISOString();
 };
 
+app.use('/webhooks', express.json({ limit: '100kb' }), couponWebhookRoutes);
+
 app.get('/health', (_req, res) => {
   const isHealthy = runtimeHealth.mode === 'healthy';
   const payload = {
@@ -72,7 +75,7 @@ app.use(
     origin: config.adminClientOrigin,
     credentials: true,
   }),
-  express.json({ limit: '1mb' }),
+  express.json({ limit: '2mb' }),
   cookieParser()
 );
 app.use('/admin', authRoutes);

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import AnnounceCouponModal from '../../components/AnnounceCouponModal';
 import {
   CouponRow,
   createCoupon,
   fetchCoupons,
   finishCoupon,
+  sendCouponWinners,
 } from '../../services/couponService';
 
 const CODE_REGEX = /^[A-Za-z0-9_-]{1,20}$/;
@@ -28,7 +30,10 @@ const Coupons = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [announceOpen, setAnnounceOpen] = useState(false);
+  const [sendWinnersOpen, setSendWinnersOpen] = useState(false);
   const [selected, setSelected] = useState<CouponRow | null>(null);
+  const [notifyWinners, setNotifyWinners] = useState(true);
 
   const now = new Date();
   const [couponCode, setCouponCode] = useState('');
@@ -83,12 +88,26 @@ const Coupons = () => {
   const openFinish = (row: CouponRow) => {
     setSelected(row);
     setActionPassword('');
+    setNotifyWinners(true);
     setFinishOpen(true);
+  };
+
+  const openAnnounce = (row: CouponRow) => {
+    setSelected(row);
+    setAnnounceOpen(true);
+  };
+
+  const openSendWinners = (row: CouponRow) => {
+    setSelected(row);
+    setActionPassword('');
+    setSendWinnersOpen(true);
   };
 
   const closeModals = () => {
     setCreateOpen(false);
     setFinishOpen(false);
+    setAnnounceOpen(false);
+    setSendWinnersOpen(false);
     setSelected(null);
   };
 
@@ -156,13 +175,46 @@ const Coupons = () => {
     }
     setActionLoading(true);
     try {
-      await finishCoupon(selected.coupon_id, { admin_password: actionPassword });
-      toast.success('Coupon marked as finished.');
+      await finishCoupon(selected.coupon_id, {
+        admin_password: actionPassword,
+        notify_winners: notifyWinners,
+      });
+      toast.success(
+        notifyWinners
+          ? 'Coupon marked as finished. Winners list will be sent.'
+          : 'Coupon marked as finished without notifying the group.'
+      );
       closeModals();
       loadCoupons(page);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Finish failed';
       toast.error(message === 'invalid_action_password' ? 'Password incorrect.' : message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSendWinners = async () => {
+    if (!selected) return;
+    if (!actionPassword.trim()) {
+      toast.error('Enter action password.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await sendCouponWinners(selected.coupon_id, { admin_password: actionPassword });
+      toast.success('Winners list sent.');
+      closeModals();
+      loadCoupons(page);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Send failed';
+      toast.error(
+        message === 'invalid_action_password'
+          ? 'Password incorrect.'
+          : message === 'already_sent'
+            ? 'Winners were already sent for this coupon.'
+            : message
+      );
     } finally {
       setActionLoading(false);
     }
@@ -253,6 +305,7 @@ const Coupons = () => {
               <th>Starts At</th>
               <th>Expires At</th>
               <th>Status</th>
+              <th>Sent</th>
               <th>Created By</th>
               <th>Actions</th>
             </tr>
@@ -260,13 +313,13 @@ const Coupons = () => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={11} className="coupons-empty">
+                <td colSpan={12} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="coupons-empty">
+                <td colSpan={12} className="coupons-empty">
                   No coupons found.
                 </td>
               </tr>
@@ -274,6 +327,7 @@ const Coupons = () => {
               rows.map((row) => {
                 const remaining = Math.max(row.max_uses_total - row.current_uses, 0);
                 const showFinish = row.status === 'active' || row.status === 'expired';
+                const canSendWinners = row.status === 'finished' && row.sent === false;
                 return (
                   <tr key={row.coupon_id}>
                     <td>{row.coupon_id}</td>
@@ -289,9 +343,34 @@ const Coupons = () => {
                     <td>
                       <span className={`status-pill ${row.status}`}>{row.status}</span>
                     </td>
+                    <td>
+                      <span className={`status-pill ${row.sent ? 'sent' : 'unsent'}`}>
+                        {row.sent ? 'yes' : 'no'}
+                      </span>
+                    </td>
                     <td>{row.created_by ?? '-'}</td>
                     <td>
                       <div className="action-stack">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => openAnnounce(row)}
+                        >
+                          Announce
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => openSendWinners(row)}
+                          disabled={!canSendWinners}
+                          title={
+                            canSendWinners
+                              ? 'Send the winners CSV to the coupon group'
+                              : 'Active only when the coupon is finished and winners have not been sent'
+                          }
+                        >
+                          Send winners
+                        </button>
                         {showFinish ? (
                           <button
                             type="button"
@@ -300,9 +379,7 @@ const Coupons = () => {
                           >
                             Finish
                           </button>
-                        ) : (
-                          <span className="muted-text">-</span>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -444,7 +521,25 @@ const Coupons = () => {
               </button>
             </div>
             <div className="modal-body">
-              <p className="modal-confirmation">Are you sure?</p>
+              <p className="modal-confirmation">
+                Finish coupon <strong>{selected.coupon_code}</strong>? Players will no longer be able
+                to redeem it.
+              </p>
+              <div className="modal-field checkbox-field">
+                <label htmlFor="notifyWinners">
+                  <input
+                    id="notifyWinners"
+                    type="checkbox"
+                    checked={notifyWinners}
+                    onChange={(event) => setNotifyWinners(event.target.checked)}
+                  />
+                  Notify the user (send winners CSV to the group)
+                </label>
+                <span className="field-helper">
+                  Turn this off to close the coupon without sending Telegram. That also marks Sent as
+                  yes so the webhook will not send later.
+                </span>
+              </div>
               <div className="modal-field">
                 <label htmlFor="finishPassword">Admin Action Password</label>
                 <input
@@ -470,6 +565,59 @@ const Coupons = () => {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {sendWinnersOpen && selected ? (
+        <div className="modal-overlay" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="modal-header">
+              <h3>Send Winners</h3>
+              <button type="button" className="icon-button" onClick={closeModals} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-confirmation">
+                Send the winners CSV for <strong>{selected.coupon_code}</strong> to the coupon group?
+                Telegram will receive the file plus the caption:
+              </p>
+              <pre className="coupon-caption-preview">{'የኩፖኑ ተሸላሚዎች 🎁☝️\nተጠናቋል ✅'}</pre>
+              <div className="modal-field">
+                <label htmlFor="sendWinnersPassword">Admin Action Password</label>
+                <input
+                  id="sendWinnersPassword"
+                  type="password"
+                  value={actionPassword}
+                  onChange={(event) => setActionPassword(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-button" onClick={closeModals}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => void handleSendWinners()}
+                disabled={actionLoading}
+              >
+                {actionLoading ? 'Sending...' : 'Send winners'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {announceOpen && selected ? (
+        <AnnounceCouponModal
+          coupon={selected}
+          onClose={closeModals}
+          onSent={() => {
+            closeModals();
+            loadCoupons(page);
+          }}
+        />
       ) : null}
     </div>
   );

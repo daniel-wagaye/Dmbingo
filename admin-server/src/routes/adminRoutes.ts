@@ -10,12 +10,14 @@ import {
 } from '../controllers/adminManagementController';
 import { createBank, deleteBank, listBanks, updateBank } from '../controllers/bankController';
 import {
+  announceCoupon,
   createCoupon,
   exportCouponHistoryCsv,
   exportCouponsCsv,
   finishCoupon,
   listCouponHistory,
   listCoupons,
+  sendCouponWinners,
 } from '../controllers/couponController';
 import { approveDeposit, createDeposit, listDeposits, rejectDeposit } from '../controllers/depositController';
 import {
@@ -293,6 +295,8 @@ router.get('/coupons', adminAuth, listCoupons);
 router.get('/coupons/export', adminAuth, exportCouponsCsv);
 router.post('/coupons', adminAuth, createCoupon);
 router.post('/coupons/:id/finish', adminAuth, finishCoupon);
+router.post('/coupons/:id/send-winners', adminAuth, sendCouponWinners);
+router.post('/coupons/:id/announce', adminAuth, announceCoupon);
 router.get('/coupons/history', adminAuth, listCouponHistory);
 router.get('/coupons/history/export', adminAuth, exportCouponHistoryCsv);
 router.get('/transfers', adminAuth, listTransferHistory);

@@ -1,6 +1,8 @@
 import argon2 from 'argon2';
 import type { Request, Response } from 'express';
 import { pool } from '../db/drizzle';
+import { sendGroupAnnouncement, TelegramDeliveryError } from '../services/telegramNotifier';
+import { sendCouponWinnersIfUnsent } from '../services/couponWinnersService';
 
 type AdminPayload = { adminId: number; role: 'super_admin' | 'withdrawal_admin' };
 
@@ -106,6 +108,7 @@ export const listCoupons = async (req: Request, res: Response) => {
         c.starts_at,
         c.expires_at,
         c.status,
+        c.sent,
         c.created_at,
         a.username AS created_by
       FROM coupons c
@@ -122,7 +125,7 @@ export const listCoupons = async (req: Request, res: Response) => {
     const expiresAt = new Date(row.expires_at as string).getTime();
     const derivedStatus =
       row.status === 'finished' ? 'finished' : expiresAt <= now ? 'expired' : 'active';
-    return { ...row, status: derivedStatus };
+    return { ...row, status: derivedStatus, sent: row.sent === true };
   });
 
   return res.json({
@@ -264,10 +267,14 @@ export const finishCoupon = async (req: Request, res: Response) => {
   if (!couponId) {
     return res.status(400).json({ error: 'invalid_coupon_id' });
   }
-  const { admin_password } = req.body as { admin_password?: string };
+  const { admin_password, notify_winners } = req.body as {
+    admin_password?: string;
+    notify_winners?: boolean;
+  };
   if (!admin_password) {
     return res.status(400).json({ error: 'missing_fields' });
   }
+  const notifyWinners = notify_winners !== false;
 
   const adminInfo = await getAdminInfo(admin.adminId);
   if (!adminInfo) {
@@ -282,7 +289,7 @@ export const finishCoupon = async (req: Request, res: Response) => {
   try {
     await client.query('BEGIN');
     const existingResult = await client.query(
-      `SELECT coupon_id, status FROM coupons WHERE coupon_id = $1 FOR UPDATE`,
+      `SELECT coupon_id, status, sent FROM coupons WHERE coupon_id = $1 FOR UPDATE`,
       [couponId]
     );
     if (!existingResult.rows.length) {
@@ -295,13 +302,23 @@ export const finishCoupon = async (req: Request, res: Response) => {
     }
 
     const updateResult = await client.query(
-      `UPDATE coupons SET status = 'finished' WHERE coupon_id = $1 RETURNING coupon_id, status`,
-      [couponId]
+      `UPDATE coupons
+       SET status = 'finished',
+           sent = CASE WHEN $2::boolean THEN sent ELSE TRUE END
+       WHERE coupon_id = $1 AND status IS DISTINCT FROM 'finished'
+       RETURNING coupon_id, status, sent`,
+      [couponId, notifyWinners]
     );
+    if (!updateResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'already_finished' });
+    }
 
     const details = JSON.stringify({
       before_status: existingResult.rows[0].status,
       after_status: updateResult.rows[0].status,
+      notify_winners: notifyWinners,
+      sent: updateResult.rows[0].sent,
     });
     await client.query(
       `INSERT INTO admin_actions (admin_id, action, target_id, target_type, details, ip_address, user_agent)
@@ -310,7 +327,18 @@ export const finishCoupon = async (req: Request, res: Response) => {
     );
 
     await client.query('COMMIT');
-    return res.json({ status: 'ok' });
+
+    if (notifyWinners) {
+      void sendCouponWinnersIfUnsent(couponId).catch((error) => {
+        console.error('[finishCoupon] winners send failed:', error);
+      });
+    }
+
+    return res.json({
+      status: 'ok',
+      sent: updateResult.rows[0].sent,
+      notify_winners: notifyWinners,
+    });
   } catch (error) {
     await client.query('ROLLBACK');
     const message = error instanceof Error ? error.message : 'Request failed';
@@ -318,6 +346,184 @@ export const finishCoupon = async (req: Request, res: Response) => {
   } finally {
     client.release();
   }
+};
+
+const MAX_IMAGE_BYTES = 700 * 1024;
+
+const decodeJpegBase64 = (raw: string): Buffer | null => {
+  const trimmed = raw.trim();
+  const comma = trimmed.indexOf(',');
+  const payload = trimmed.startsWith('data:') && comma >= 0 ? trimmed.slice(comma + 1) : trimmed;
+  if (!payload || payload.length > 1_200_000) {
+    return null;
+  }
+  try {
+    const buffer = Buffer.from(payload, 'base64');
+    if (buffer.length < 3 || buffer.length > MAX_IMAGE_BYTES) {
+      return null;
+    }
+    if (buffer[0] !== 0xff || buffer[1] !== 0xd8 || buffer[2] !== 0xff) {
+      return null;
+    }
+    return buffer;
+  } catch {
+    return null;
+  }
+};
+
+export const sendCouponWinners = async (req: Request, res: Response) => {
+  const admin = ensureSuperAdmin(req, res);
+  if (!admin) return;
+
+  const couponId = Number.parseInt(req.params.id, 10);
+  if (!couponId) {
+    return res.status(400).json({ error: 'invalid_coupon_id' });
+  }
+  const { admin_password } = req.body as { admin_password?: string };
+  if (!admin_password) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+
+  const adminInfo = await getAdminInfo(admin.adminId);
+  if (!adminInfo) {
+    return res.status(404).json({ error: 'admin_not_found' });
+  }
+  const passwordOk = await argon2.verify(adminInfo.action_password_hash, admin_password);
+  if (!passwordOk) {
+    return res.status(401).json({ error: 'invalid_action_password' });
+  }
+
+  try {
+    const result = await sendCouponWinnersIfUnsent(couponId);
+    if (result.skipped) {
+      return res.status(409).json({
+        error: 'already_sent',
+        message: 'Winners were already sent for this coupon.',
+      });
+    }
+    await pool.query(
+      `INSERT INTO admin_actions (admin_id, action, target_id, target_type, details, ip_address, user_agent)
+       VALUES ($1, 'send_coupon_winners', $2, 'coupon', $3::jsonb, $4, $5)`,
+      [
+        admin.adminId,
+        couponId,
+        JSON.stringify({ sent: true }),
+        req.ip ?? null,
+        req.get('user-agent') ?? null,
+      ]
+    ).catch((error) => console.error('[sendCouponWinners] admin_actions failed:', error));
+    return res.json({ status: 'ok', sent: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Send failed';
+    if (message === 'coupon_not_found') {
+      return res.status(404).json({ error: message, message: 'Coupon not found.' });
+    }
+    if (message === 'coupon_not_finished') {
+      return res.status(409).json({ error: message, message: 'Coupon is not finished yet.' });
+    }
+    if (error instanceof TelegramDeliveryError) {
+      return res.status(400).json({ error: error.reason, message: error.message });
+    }
+    return res.status(500).json({ error: 'send_failed', message });
+  }
+};
+
+export const announceCoupon = async (req: Request, res: Response) => {
+  const admin = ensureSuperAdmin(req, res);
+  if (!admin) return;
+
+  const couponId = Number.parseInt(req.params.id, 10);
+  if (!couponId) {
+    return res.status(400).json({ error: 'invalid_coupon_id' });
+  }
+  const { admin_password, text, imageUrl, imageBase64 } = req.body as {
+    admin_password?: string;
+    text?: string;
+    imageUrl?: string;
+    imageBase64?: string;
+  };
+  if (!admin_password) {
+    return res.status(400).json({ error: 'missing_fields' });
+  }
+
+  const messageText = typeof text === 'string' ? text.trim() : '';
+  const url = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+  if (url && !/^https?:\/\//i.test(url)) {
+    return res.status(400).json({
+      error: 'invalid_image_url',
+      message: 'Image URL must start with http:// or https://.',
+    });
+  }
+  const hasImage = typeof imageBase64 === 'string' && imageBase64.trim().length > 0;
+  if (!messageText && !url && !hasImage) {
+    return res.status(400).json({
+      error: 'empty_message',
+      message: 'Enter a message or attach a photo.',
+    });
+  }
+  if (messageText.length > 4096) {
+    return res.status(400).json({
+      error: 'text_too_long',
+      message: 'Message can be at most 4096 characters.',
+    });
+  }
+
+  let imageJpeg: Buffer | undefined;
+  if (hasImage) {
+    const decoded = decodeJpegBase64(imageBase64!);
+    if (!decoded) {
+      return res.status(400).json({
+        error: 'invalid_image',
+        message: 'The photo is invalid or larger than 1 MB after compression.',
+      });
+    }
+    imageJpeg = decoded;
+  }
+
+  const adminInfo = await getAdminInfo(admin.adminId);
+  if (!adminInfo) {
+    return res.status(404).json({ error: 'admin_not_found' });
+  }
+  const passwordOk = await argon2.verify(adminInfo.action_password_hash, admin_password);
+  if (!passwordOk) {
+    return res.status(401).json({ error: 'invalid_action_password' });
+  }
+
+  const coupon = await pool.query(
+    `SELECT coupon_id FROM coupons WHERE coupon_id = $1`,
+    [couponId]
+  );
+  if (!coupon.rows.length) {
+    return res.status(404).json({ error: 'coupon_not_found', message: 'Coupon not found.' });
+  }
+
+  try {
+    await sendGroupAnnouncement({
+      text: messageText,
+      imageUrl: imageJpeg ? undefined : url || undefined,
+      imageJpeg,
+    });
+  } catch (error) {
+    if (error instanceof TelegramDeliveryError) {
+      return res.status(400).json({ error: error.reason, message: error.message });
+    }
+    const fallback = error instanceof Error ? error.message : 'Message failed.';
+    return res.status(500).json({ error: 'send_failed', message: fallback });
+  }
+
+  await pool.query(
+    `INSERT INTO admin_actions (admin_id, action, target_id, target_type, details, ip_address, user_agent)
+     VALUES ($1, 'announce_coupon', $2, 'coupon', $3::jsonb, $4, $5)`,
+    [
+      admin.adminId,
+      couponId,
+      JSON.stringify({ hasImage: Boolean(imageJpeg || url), textLength: messageText.length }),
+      req.ip ?? null,
+      req.get('user-agent') ?? null,
+    ]
+  ).catch((error) => console.error('[announceCoupon] admin_actions failed:', error));
+
+  return res.json({ status: 'ok' });
 };
 
 export const exportCouponsCsv = async (req: Request, res: Response) => {
@@ -358,6 +564,7 @@ export const exportCouponsCsv = async (req: Request, res: Response) => {
         c.starts_at,
         c.expires_at,
         c.status,
+        c.sent,
         c.created_at,
         a.username AS created_by
       FROM coupons c
@@ -386,6 +593,7 @@ export const exportCouponsCsv = async (req: Request, res: Response) => {
     'Starts At',
     'Expires At',
     'Status',
+    'Sent',
     'Created By',
     'Created At',
   ];
@@ -402,6 +610,7 @@ export const exportCouponsCsv = async (req: Request, res: Response) => {
         row.starts_at,
         row.expires_at,
         row.status,
+        row.sent === true ? 'true' : 'false',
         row.created_by ?? '',
         row.created_at,
       ]

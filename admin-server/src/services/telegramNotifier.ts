@@ -162,3 +162,89 @@ export const sendDirectUserMessage = async (params: {
     throw mapTelegramDeliveryError(err);
   }
 };
+
+const requireBot = () => {
+  if (!bot) {
+    throw new TelegramDeliveryError(
+      'bot_not_configured',
+      'Message failed because the Telegram bot is not configured.'
+    );
+  }
+  return bot;
+};
+
+const requireCouponGroupChatId = (): number => {
+  const raw = config.couponGroupChatId.trim();
+  const chatId = Number(raw);
+  if (!raw || !Number.isFinite(chatId)) {
+    throw new TelegramDeliveryError(
+      'group_not_configured',
+      'Message failed because COUPON_GROUP_CHAT_ID is not set.'
+    );
+  }
+  return chatId;
+};
+
+export const COUPON_WINNERS_CAPTION = 'የኩፖኑ ተሸላሚዎች 🎁☝️\nተጠናቋል ✅';
+
+export const sendGroupDocument = async (params: {
+  filename: string;
+  bytes: Buffer;
+  caption: string;
+}): Promise<void> => {
+  const telegram = requireBot();
+  const chatId = requireCouponGroupChatId();
+  try {
+    await telegram.telegram.sendDocument(
+      chatId,
+      { source: params.bytes, filename: params.filename },
+      { caption: params.caption }
+    );
+  } catch (err) {
+    throw mapTelegramDeliveryError(err);
+  }
+};
+
+export const sendGroupAnnouncement = async (params: {
+  text: string;
+  imageUrl?: string;
+  imageJpeg?: Buffer;
+}): Promise<void> => {
+  const telegram = requireBot();
+  const chatId = requireCouponGroupChatId();
+  const text = params.text.trim();
+  const jpeg = params.imageJpeg;
+  const imageUrl = params.imageUrl?.trim();
+
+  try {
+    if (jpeg && jpeg.length > 0) {
+      const caption = text ? text.slice(0, PHOTO_CAPTION_MAX) : undefined;
+      await telegram.telegram.sendPhoto(
+        chatId,
+        { source: jpeg, filename: 'coupon.jpg' },
+        caption ? { caption } : {}
+      );
+      if (text.length > PHOTO_CAPTION_MAX) {
+        await telegram.telegram.sendMessage(chatId, text.slice(PHOTO_CAPTION_MAX));
+      }
+      return;
+    }
+
+    if (imageUrl) {
+      const caption = text ? text.slice(0, PHOTO_CAPTION_MAX) : undefined;
+      await telegram.telegram.sendPhoto(chatId, imageUrl, caption ? { caption } : {});
+      if (text.length > PHOTO_CAPTION_MAX) {
+        await telegram.telegram.sendMessage(chatId, text.slice(PHOTO_CAPTION_MAX));
+      }
+      return;
+    }
+
+    if (!text) {
+      throw new TelegramDeliveryError('empty_message', 'Enter a message or attach a photo.');
+    }
+    await telegram.telegram.sendMessage(chatId, text);
+  } catch (err) {
+    if (err instanceof TelegramDeliveryError) throw err;
+    throw mapTelegramDeliveryError(err);
+  }
+};

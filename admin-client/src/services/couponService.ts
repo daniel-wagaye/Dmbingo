@@ -10,6 +10,7 @@ export type CouponRow = {
   starts_at: string;
   expires_at: string;
   status: 'active' | 'expired' | 'finished';
+  sent: boolean;
   created_at: string;
   created_by: string | null;
 };
@@ -95,8 +96,48 @@ export const createCoupon = async (payload: {
     body: JSON.stringify(payload),
   });
 
-export const finishCoupon = async (couponId: number, payload: { admin_password: string }) =>
-  request<{ status: 'ok' }>(`/admin/coupons/${couponId}/finish`, {
+export const finishCoupon = async (
+  couponId: number,
+  payload: { admin_password: string; notify_winners: boolean }
+) =>
+  request<{ status: 'ok'; sent: boolean; notify_winners: boolean }>(
+    `/admin/coupons/${couponId}/finish`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+
+export const sendCouponWinners = async (couponId: number, payload: { admin_password: string }) =>
+  request<{ status: 'ok'; sent: boolean }>(`/admin/coupons/${couponId}/send-winners`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const DEFAULT_COUPON_ANNOUNCE_IMAGE_URL = 'https://i.postimg.cc/Px2dq1Kv/IMG-1745.jpg';
+
+export const buildCouponAnnounceText = (couponCode: string, maxUsesTotal: number) =>
+  `ኩፖን ኮድ ተለቋል 🥳
+
+ለ${maxUsesTotal} ተጫዋቾች! 🥳🥳
+የዛሬው ኩፖን እድለኛ ለሆኑ ቀዳሚ ${maxUsesTotal} ተጫዋቾች ብቻ የሚሰራ ይሆናል 💰💰
+
+ፈጥነው ኩፖን ኮዱን ይጠቀሙ እና በ ቦነስ በሽ ብሽ ይብሉ🥳🥳🤑💰
+
+መልካም እድል 🍀🍀
+ኩፖን፡ ${couponCode}
+@dmbingobot`;
+
+export const announceCoupon = async (
+  couponId: number,
+  payload: {
+    admin_password: string;
+    text: string;
+    imageUrl?: string;
+    imageBase64?: string;
+  }
+) =>
+  request<{ status: 'ok' }>(`/admin/coupons/${couponId}/announce`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

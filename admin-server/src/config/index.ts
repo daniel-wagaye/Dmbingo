@@ -37,6 +37,7 @@ export const config = {
   telegramBotToken: getEnv('TELEGRAM_BOT_TOKEN'),
   supportBotToken: getEnv('SUPPORT_BOT_TOKEN'),
   webhookPassKey: getEnv('WEBHOOK_PASS_KEY'),
+  couponGroupChatId: getEnv('COUPON_GROUP_CHAT_ID'),
   webhookBodyLimit: getEnv('WEBHOOK_BODY_LIMIT', '100kb'),
   globalRateLimitWindowMs: getNumber('GLOBAL_RATE_LIMIT_WINDOW_MS', 60000),
   globalRateLimitMaxRequests: getNumber('GLOBAL_RATE_LIMIT_MAX_REQUESTS', 120),
