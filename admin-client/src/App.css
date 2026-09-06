@@ -22,6 +22,7 @@
 
 html {
   min-height: 100%;
+  max-width: 100%;
   background-color: var(--bg);
   background-image:
     radial-gradient(circle at top, rgba(46, 230, 255, 0.15), transparent 50%),
@@ -35,12 +36,14 @@ html {
 body {
   margin: 0;
   min-height: 100%;
+  max-width: 100%;
   color: var(--text);
   background: transparent;
 }
 
 #root {
   min-height: 100%;
+  max-width: 100%;
 }
 
 .auth-page {
@@ -174,22 +177,59 @@ body {
   display: flex;
   align-items: stretch;
   background: transparent;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .admin-sidebar {
   width: 250px;
   flex-shrink: 0;
-  padding: 28px 20px;
+  padding: 20px 16px;
   background: var(--card-bg);
   border-right: 1px solid var(--card-border);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width 0.2s ease, padding 0.2s ease;
+  z-index: 15;
+}
+
+.admin-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .admin-brand {
   font-weight: 600;
   font-size: 1.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-sidebar-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.admin-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .admin-nav {
@@ -208,12 +248,26 @@ body {
 }
 
 .admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
   color: var(--text);
   text-decoration: none;
   border: 1px solid transparent;
   transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-nav-item svg {
+  flex-shrink: 0;
+}
+
+.admin-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-nav-item:hover {
@@ -231,15 +285,65 @@ body {
   pointer-events: none;
 }
 
+.admin-layout.sidebar-collapsed .admin-sidebar {
+  width: 76px;
+  padding: 16px 10px;
+}
+
+.admin-layout.sidebar-collapsed .admin-sidebar-header {
+  flex-direction: column;
+}
+
+.admin-layout.sidebar-collapsed .admin-brand {
+  font-size: 0.85rem;
+  text-align: center;
+  width: 100%;
+}
+
+.admin-layout.sidebar-collapsed .admin-nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+
+.admin-layout.sidebar-collapsed .admin-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.admin-layout.sidebar-collapsed .admin-nav-action {
+  display: none;
+}
+
 .admin-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .admin-topbar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
   padding: 20px 32px 0;
+}
+
+.admin-sidebar-toggle-top {
+  margin-right: auto;
+}
+
+@media (min-width: 901px) {
+  .admin-sidebar-toggle-top {
+    display: none;
+  }
 }
 
 .admin-signout-button {
@@ -839,7 +943,9 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .users-table {
@@ -1069,7 +1175,9 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .deposits-table {
@@ -1236,7 +1344,9 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .withdrawals-table {
@@ -1349,7 +1459,9 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .banks-table {
@@ -1465,7 +1577,9 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .regex-table {
@@ -1648,6 +1762,8 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 18px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .coupons-table {
@@ -1796,4 +1912,52 @@ body {
 .user-detail-value.mono {
   font-family: 'Courier New', Courier, monospace;
   letter-spacing: 0.5px;
+}
+
+.users-table,
+.deposits-table,
+.withdrawals-table,
+.banks-table,
+.regex-table,
+.coupons-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.users-table th,
+.users-table td,
+.deposits-table th,
+.deposits-table td,
+.withdrawals-table th,
+.withdrawals-table td,
+.banks-table th,
+.banks-table td,
+.regex-table th,
+.regex-table td,
+.coupons-table th,
+.coupons-table td {
+  white-space: nowrap;
+}
+
+.decline-reason-cell,
+.decline-reason-cell td {
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  .admin-topbar {
+    padding: 16px 16px 0;
+  }
+
+  .dashboard-page,
+  .users-page,
+  .deposits-page,
+  .withdrawals-page,
+  .banks-page,
+  .regex-page,
+  .gameconfig-page,
+  .coupons-page,
+  .page-placeholder {
+    padding: 16px 16px 40px;
+  }
 }

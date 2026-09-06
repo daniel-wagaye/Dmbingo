@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
+import { AdminNavIcon } from './components/AdminNavIcon';
 import { useAuth } from './hooks/useAuth';
 import AdminCreditHistory from './pages/AdminCreditHistory/AdminCreditHistory';
 import AdminManagment from './pages/AdminManagment/AdminManagment';
@@ -36,7 +37,28 @@ type AdminLayoutProps = {
   onSignOut?: () => void;
 };
 
+const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
+
 const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) => {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      if (stored === '1') return true;
+      if (stored === '0') return false;
+    } catch {
+      /* ignore */
+    }
+    return window.matchMedia('(max-width: 900px)').matches;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
+
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', href: '/admin/dashboard', enabled: role === 'super_admin' },
     { key: 'users', label: 'Users', href: '/admin/users', enabled: role === 'super_admin' },
@@ -65,9 +87,26 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
   ];
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout${collapsed ? ' sidebar-collapsed' : ''}`}>
       <aside className="admin-sidebar">
-        <div className="admin-brand">DM Bingo Admin</div>
+        <div className="admin-sidebar-header">
+          <div className="admin-brand">{collapsed ? 'DM' : 'DM Bingo Admin'}</div>
+          <button
+            type="button"
+            className="admin-sidebar-toggle"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              {collapsed ? (
+                <polyline points="9 6 15 12 9 18" />
+              ) : (
+                <polyline points="15 6 9 12 15 18" />
+              )}
+            </svg>
+          </button>
+        </div>
         <nav className="admin-nav">
           {navItems.filter((item) => item.enabled).map((item) => {
             const isActive =
@@ -79,8 +118,11 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
                 key={item.key}
                 className={`admin-nav-item${isActive ? ' active' : ''}`}
                 href={item.href}
+                title={item.label}
+                aria-label={item.label}
               >
-                {item.label}
+                <AdminNavIcon name={item.key} />
+                <span className="admin-nav-label">{item.label}</span>
               </a>
             );
           })}
@@ -93,6 +135,19 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
       </aside>
       <main className="admin-content">
         <div className="admin-topbar">
+          <button
+            type="button"
+            className="admin-sidebar-toggle admin-sidebar-toggle-top"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
           <button type="button" className="secondary-button admin-signout-button" onClick={onSignOut}>
             Sign Out
           </button>
