@@ -1788,6 +1788,22 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.coupons-table tr.game-row-started td {
+  background: rgba(52, 211, 153, 0.18);
+}
+
+.coupons-table tr.game-row-error td {
+  background: rgba(248, 113, 113, 0.18);
+}
+
+.coupons-table tr.game-row-started:hover td {
+  background: rgba(52, 211, 153, 0.28);
+}
+
+.coupons-table tr.game-row-error:hover td {
+  background: rgba(248, 113, 113, 0.28);
+}
+
 .coupons-empty {
   text-align: center;
   color: var(--muted);

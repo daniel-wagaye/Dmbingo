@@ -11,6 +11,13 @@ const formatNumber = (value: string | number | null) => {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(numeric);
 };
 
+const gameRowClass = (phase: string | null) => {
+  const value = (phase ?? '').toLowerCase();
+  if (value === 'started') return 'game-row-started';
+  if (value === 'error') return 'game-row-error';
+  return undefined;
+};
+
 const Games = () => {
   const [rows, setRows] = useState<GameRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -134,7 +141,7 @@ const Games = () => {
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={row.game_id}>
+                <tr key={row.game_id} className={gameRowClass(row.phase)}>
                   <td>{index + 1}</td>
                   <td>{row.game_id}</td>
                   <td>{row.phase ?? '-'}</td>
