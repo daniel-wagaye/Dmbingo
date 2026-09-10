@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import i18n from 'i18next';
 import { fetchUser, registerUser, User } from '../services/userService';
+import { fetchBankData, type BankInfo } from '../services/depositService';
 import '../telegram/types';
 
 function syncLanguage(user: User): void {
@@ -39,6 +40,7 @@ export function useAuth() {
     loading: true,
     timeSync: null,
   });
+  const [banks, setBanks] = useState<BankInfo[]>([]);
 
   const loadUser = useCallback(async () => {
     try {
@@ -64,6 +66,14 @@ export function useAuth() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    fetchBankData()
+      .then((res) => {
+        if (res.success) setBanks(res.banks);
+      })
+      .catch(() => {});
+  }, []);
 
   const doRegister = useCallback(
     async (contactRaw: string): Promise<boolean> => {
@@ -111,6 +121,8 @@ export function useAuth() {
     registered: state.registered,
     loading: state.loading,
     timeSync: state.timeSync,
+    banks,
+    setBanks,
     doRegister,
     refreshUser,
     updateUser,

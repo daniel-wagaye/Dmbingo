@@ -23,7 +23,7 @@ function InfoPage() {
 }
 
 function AppRoutes() {
-  const { user, registered, loading, doRegister, refreshUser, updateUser, timeSync } = useAuth();
+  const { user, registered, loading, doRegister, refreshUser, updateUser, timeSync, banks, setBanks } = useAuth();
   useTelegramBackButton();
 
   return (
@@ -56,6 +56,8 @@ function AppRoutes() {
                 onUserUpdate={updateUser}
                 onRefreshUser={refreshUser}
                 timeSync={timeSync}
+                banks={banks}
+                onBanksChange={setBanks}
               />
             </AuthGuard>
           }

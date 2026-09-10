@@ -4,22 +4,39 @@ import toast from 'react-hot-toast';
 import { fetchBankData, validateDeposit, parseSmsForTxnReference, BankInfo } from '../../services/depositService';
 import './Deposit.css';
 
+function banksEqual(a: BankInfo[], b: BankInfo[]) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 interface DepositModalProps {
+  banks: BankInfo[];
+  onBanksChange: (banks: BankInfo[]) => void;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function DepositModal({ onClose, onSuccess }: DepositModalProps) {
+export default function DepositModal({ banks: cachedBanks, onBanksChange, onClose, onSuccess }: DepositModalProps) {
   const { t } = useTranslation();
-  const [banks, setBanks] = useState<BankInfo[]>([]);
+  const [banks, setBanks] = useState<BankInfo[]>(cachedBanks);
   const [input, setInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   useEffect(() => {
+    setBanks(cachedBanks);
+  }, [cachedBanks]);
+
+  useEffect(() => {
     fetchBankData()
-      .then((res) => { if (res.success) setBanks(res.banks); })
+      .then((res) => {
+        if (!res.success) return;
+        if (banksEqual(res.banks, cachedBanks)) return;
+        setBanks(res.banks);
+        onBanksChange(res.banks);
+      })
       .catch(() => {});
+    // Modal remounts on each open; compare against the cache from this open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCopy = (accountNumber: string, idx: number) => {

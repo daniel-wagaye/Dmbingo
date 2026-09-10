@@ -17,6 +17,7 @@ import SupportModal from '../Support';
 import StreakModal from '../Streak';
 import { deriveStreak, markShownOn, wasShownOn } from '../../utils/streak';
 import { serverNowMs, type TimeSync } from '../../hooks/useAuth';
+import { type BankInfo } from '../../services/depositService';
 import './Dashboard.css';
 
 interface DashboardProps {
@@ -26,9 +27,11 @@ interface DashboardProps {
   onUserUpdate: (partial: Partial<User>) => void;
   onRefreshUser: () => Promise<void>;
   timeSync: TimeSync | null;
+  banks: BankInfo[];
+  onBanksChange: (banks: BankInfo[]) => void;
 }
 
-export default function Dashboard({ user, registered, onRegister, onUserUpdate, onRefreshUser, timeSync }: DashboardProps) {
+export default function Dashboard({ user, registered, onRegister, onUserUpdate, onRefreshUser, timeSync, banks, onBanksChange }: DashboardProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { handleRequestContact } = RegisterContact({ onRegister });
@@ -358,6 +361,8 @@ export default function Dashboard({ user, registered, onRegister, onUserUpdate, 
 
       {showDeposit && (
         <DepositModal
+          banks={banks}
+          onBanksChange={onBanksChange}
           onClose={() => setShowDeposit(false)}
           onSuccess={handleWalletChanged}
         />
