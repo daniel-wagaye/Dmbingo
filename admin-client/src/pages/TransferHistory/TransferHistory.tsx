@@ -100,6 +100,7 @@ const TransferHistory = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>ID</th>
               <th>From</th>
               <th>To</th>
@@ -113,19 +114,20 @@ const TransferHistory = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   No transfers found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.transfer_id} className="history-row" onClick={() => setSelected(row)}>
+                  <td>{index + 1}</td>
                   <td>{row.transfer_id}</td>
                   <td>
                     <TelegramIdCell telegramId={row.sender_id} onClick={setDetailId} /> / {row.sender_phone ?? '-'}

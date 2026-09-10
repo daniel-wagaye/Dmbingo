@@ -331,6 +331,7 @@ const DepositBankRegex = () => {
         <table className="regex-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>ID</th>
               <th>Bank Name</th>
               <th>Regex JSON</th>
@@ -343,21 +344,22 @@ const DepositBankRegex = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="regex-empty">
+                <td colSpan={8} className="regex-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="regex-empty">
+                <td colSpan={8} className="regex-empty">
                   No regex configurations found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              rows.map((row, index) => {
                 const expanded = expandedIds.has(row.id);
                 return (
                   <tr key={row.id} className={expanded ? 'expanded' : ''}>
+                    <td>{index + 1}</td>
                     <td>{row.id}</td>
                     <td>{row.bank_name}</td>
                     <td>

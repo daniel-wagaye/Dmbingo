@@ -301,6 +301,7 @@ const Coupons = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>Coupon ID</th>
               <th>Coupon Code</th>
               <th>Prize</th>
@@ -318,23 +319,24 @@ const Coupons = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="coupons-empty">
+                <td colSpan={13} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="coupons-empty">
+                <td colSpan={13} className="coupons-empty">
                   No coupons found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              rows.map((row, index) => {
                 const remaining = Math.max(row.max_uses_total - row.current_uses, 0);
                 const showFinish = row.status === 'active' || row.status === 'expired';
                 const canSendWinners = row.status === 'finished' && row.sent === false;
                 return (
                   <tr key={row.coupon_id}>
+                    <td>{index + 1}</td>
                     <td>{row.coupon_id}</td>
                     <td>{row.coupon_code}</td>
                     <td>{row.coupon_prize}</td>

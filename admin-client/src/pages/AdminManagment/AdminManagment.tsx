@@ -282,6 +282,7 @@ const AdminManagment = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>Admin ID</th>
               <th>Role</th>
               <th>First Name</th>
@@ -303,19 +304,20 @@ const AdminManagment = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   No admins found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.admin_id}>
+                  <td>{index + 1}</td>
                   <td>{row.admin_id}</td>
                   <td>{row.role}</td>
                   <td>{row.first_name ?? '-'}</td>

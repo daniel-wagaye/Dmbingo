@@ -199,6 +199,7 @@ const ManageDepositBank = () => {
         <table className="banks-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>ID</th>
               <th>Bank Name</th>
               <th>Account Number</th>
@@ -211,19 +212,20 @@ const ManageDepositBank = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="banks-empty">
+                <td colSpan={8} className="banks-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="banks-empty">
+                <td colSpan={8} className="banks-empty">
                   No bank accounts found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.id}>
+                  <td>{index + 1}</td>
                   <td>{row.id}</td>
                   <td>{row.bank_name}</td>
                   <td>{row.account_number}</td>

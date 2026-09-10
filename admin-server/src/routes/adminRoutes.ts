@@ -36,6 +36,7 @@ import {
   listTransferHistory,
   listWinnerHistory,
   exportWinnerHistoryCsv,
+  listGames,
 } from '../controllers/historyController';
 import {
   createRegexConfig,
@@ -305,6 +306,7 @@ router.get('/admin-credits', adminAuth, listAdminCreditHistory);
 router.get('/admin-credits/export', adminAuth, exportAdminCreditHistoryCsv);
 router.get('/winners', adminAuth, listWinnerHistory);
 router.get('/winners/export', adminAuth, exportWinnerHistoryCsv);
+router.get('/games', adminAuth, listGames);
 router.get('/reports', adminAuth, listAdminActions);
 router.get('/regex', adminAuth, listRegexConfigs);
 router.post('/regex', adminAuth, createRegexConfig);

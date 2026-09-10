@@ -103,6 +103,7 @@ const ReportPage = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>ID</th>
               <th>Admin ID</th>
               <th>Admin</th>
@@ -118,19 +119,20 @@ const ReportPage = () => {
           <tbody>
             {loading && formattedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="coupons-empty">
+                <td colSpan={11} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : formattedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="coupons-empty">
+                <td colSpan={11} className="coupons-empty">
                   No reports found.
                 </td>
               </tr>
             ) : (
-              formattedRows.map((row) => (
+              formattedRows.map((row, index) => (
                 <tr key={row.action_id}>
+                  <td>{index + 1}</td>
                   <td>{row.action_id}</td>
                   <td>{row.admin_id ?? '-'}</td>
                   <td>{row.admin_username ?? '-'}</td>

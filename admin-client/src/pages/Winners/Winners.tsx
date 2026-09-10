@@ -153,6 +153,7 @@ const Winners = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>ID</th>
               <th>Game ID</th>
               <th>Telegram ID</th>
@@ -165,15 +166,16 @@ const Winners = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="coupons-empty">Loading...</td>
+                <td colSpan={8} className="coupons-empty">Loading...</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="coupons-empty">No winners found.</td>
+                <td colSpan={8} className="coupons-empty">No winners found.</td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.id}>
+                  <td>{index + 1}</td>
                   <td>{row.id}</td>
                   <td>{row.game_id ?? '-'}</td>
                   <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>

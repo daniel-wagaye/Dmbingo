@@ -10,6 +10,11 @@ type UserDetailsModalProps = {
 const formatNumber = (value: string | number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value ?? 0));
 
+const formatPlayDate = (value: string | null) => {
+  if (!value) return '-';
+  return String(value).slice(0, 10);
+};
+
 const UserDetailsModal = ({ telegramId, open, onClose }: UserDetailsModalProps) => {
   const [user, setUser] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,6 +90,14 @@ const UserDetailsModal = ({ telegramId, open, onClose }: UserDetailsModalProps) 
               <div className="user-detail-row">
                 <span className="user-detail-label">Referrals</span>
                 <span className="user-detail-value">{user.referral_count}</span>
+              </div>
+              <div className="user-detail-row">
+                <span className="user-detail-label">Streak</span>
+                <span className="user-detail-value">{user.streak_count ?? 0}</span>
+              </div>
+              <div className="user-detail-row">
+                <span className="user-detail-label">Last Played</span>
+                <span className="user-detail-value">{formatPlayDate(user.last_play_date)}</span>
               </div>
               <div className="user-detail-row">
                 <span className="user-detail-label">Last Referred</span>

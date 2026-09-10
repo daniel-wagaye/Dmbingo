@@ -8,6 +8,8 @@ type UserRow = {
   withdrawal_wallet: string;
   non_withdrawal_wallet: string;
   referral_count: number;
+  streak_count: number;
+  last_play_date: string | null;
   created_at: string;
 };
 
@@ -64,6 +66,8 @@ export type UserDetail = {
   withdrawal_wallet: string;
   non_withdrawal_wallet: string;
   referral_count: number;
+  streak_count: number;
+  last_play_date: string | null;
   last_referred_date: string | null;
   language: string;
   created_at: string;

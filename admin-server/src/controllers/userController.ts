@@ -57,6 +57,8 @@ export const getUserByTelegramId = async (req: Request, res: Response) => {
        withdrawal_wallet,
        non_withdrawal_wallet,
        referral_count,
+       streak_count,
+       last_play_date,
        last_referred_date,
        language,
        created_at
@@ -88,6 +90,8 @@ export const listUsers = async (req: Request, res: Response) => {
     withdrawal_wallet: 'withdrawal_wallet',
     non_withdrawal_wallet: 'non_withdrawal_wallet',
     referral_count: 'referral_count',
+    streak_count: 'streak_count',
+    last_play_date: 'last_play_date',
     created_at: 'created_at',
   };
   const sortColumn = allowedSort[sortBy ?? ''] ?? 'created_at';
@@ -134,6 +138,8 @@ export const listUsers = async (req: Request, res: Response) => {
       withdrawal_wallet,
       non_withdrawal_wallet,
       referral_count,
+      streak_count,
+      last_play_date,
       created_at
     FROM users
     ${whereSql}

@@ -486,6 +486,80 @@ export const exportWinnerHistoryCsv = async (req: Request, res: Response) => {
   return res.send(csv);
 };
 
+export const listGames = async (req: Request, res: Response) => {
+  const admin = ensureSuperAdmin(req, res);
+  if (!admin) return;
+
+  const page = Math.max(Number.parseInt((req.query.page as string) ?? '1', 10), 1);
+  const offset = (page - 1) * PAGE_SIZE;
+  const search = (req.query.search as string | undefined)?.trim();
+  const phase = (req.query.phase as string | undefined)?.trim();
+  const range = parseDateRange(
+    req.query.startDate as string | undefined,
+    req.query.endDate as string | undefined
+  );
+  if (range && 'error' in range) {
+    return res.status(400).json({ error: range.error });
+  }
+
+  const clauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+
+  if (search) {
+    params.push(`%${search}%`);
+    clauses.push(
+      `(CAST(game_id AS TEXT) ILIKE $${params.length} OR phase ILIKE $${params.length} OR CAST(stake_amount AS TEXT) ILIKE $${params.length})`
+    );
+  }
+  if (phase) {
+    params.push(phase);
+    clauses.push(`phase = $${params.length}`);
+  }
+  if (range && 'start' in range) {
+    params.push(range.start);
+    clauses.push(`started_at >= $${params.length}`);
+    params.push(range.end);
+    clauses.push(`started_at <= $${params.length}`);
+  }
+
+  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS total FROM games ${whereClause}`,
+    params
+  );
+  const total = Number(countResult.rows[0]?.total ?? 0);
+  const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+
+  params.push(PAGE_SIZE, offset);
+  const dataResult = await pool.query(
+    `
+      SELECT
+        game_id,
+        phase,
+        active_players,
+        minimum_player,
+        stake_amount,
+        prize_amount,
+        CASE WHEN house_profit::text = 'NaN' THEN NULL ELSE house_profit END AS house_profit,
+        real_p
+      FROM games
+      ${whereClause}
+      ORDER BY game_id DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `,
+    params
+  );
+
+  return res.json({
+    data: dataResult.rows,
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    totalPages,
+  });
+};
+
 export const listAdminActions = async (req: Request, res: Response) => {
   const admin = ensureSuperAdmin(req, res);
   if (!admin) return;

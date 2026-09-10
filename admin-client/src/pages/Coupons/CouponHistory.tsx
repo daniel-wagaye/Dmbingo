@@ -129,6 +129,7 @@ const CouponHistory = () => {
         <table className="coupons-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>Claimed ID</th>
               <th>Coupon Code</th>
               <th>Coupon ID</th>
@@ -142,19 +143,20 @@ const CouponHistory = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   No history found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.claimed_id}>
+                  <td>{index + 1}</td>
                   <td>{row.claimed_id}</td>
                   <td>{row.coupon_code ?? '-'}</td>
                   <td>{row.coupon_id ?? '-'}</td>

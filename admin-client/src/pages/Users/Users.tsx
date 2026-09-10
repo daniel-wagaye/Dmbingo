@@ -13,11 +13,18 @@ type UserRow = {
   withdrawal_wallet: string;
   non_withdrawal_wallet: string;
   referral_count: number;
+  streak_count: number;
+  last_play_date: string | null;
   created_at: string;
 };
 
 const formatNumber = (value: string | number) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value ?? 0));
+
+const formatPlayDate = (value: string | null) => {
+  if (!value) return '-';
+  return String(value).slice(0, 10);
+};
 
 const Users = () => {
   const [rows, setRows] = useState<UserRow[]>([]);
@@ -48,6 +55,8 @@ const Users = () => {
       { key: 'withdrawal_wallet', label: 'Withdrawable' },
       { key: 'non_withdrawal_wallet', label: 'Non-Withdrawable' },
       { key: 'referral_count', label: 'Referral Count' },
+      { key: 'streak_count', label: 'Streak' },
+      { key: 'last_play_date', label: 'Last Played' },
       { key: 'created_at', label: 'Created At' },
     ],
     []
@@ -194,6 +203,7 @@ const Users = () => {
         <table className="users-table">
           <thead>
             <tr>
+              <th>#</th>
               {columns.map((column) => (
                 <th key={column.key}>
                   <button
@@ -212,19 +222,20 @@ const Users = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="users-empty">
+                <td colSpan={columns.length + 2} className="users-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="users-empty">
+                <td colSpan={columns.length + 2} className="users-empty">
                   No users found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              rows.map((row, index) => (
                 <tr key={row.telegram_id}>
+                  <td>{index + 1}</td>
                   <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>{row.first_name ?? '-'}</td>
                   <td>{row.phone_number ?? '-'}</td>
@@ -232,6 +243,8 @@ const Users = () => {
                   <td>{formatNumber(row.withdrawal_wallet)}</td>
                   <td>{formatNumber(row.non_withdrawal_wallet)}</td>
                   <td>{row.referral_count}</td>
+                  <td>{row.streak_count ?? 0}</td>
+                  <td>{formatPlayDate(row.last_play_date)}</td>
                   <td>{new Date(row.created_at).toLocaleString()}</td>
                   <td>
                     <div className="action-stack">

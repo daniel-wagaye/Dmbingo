@@ -11,6 +11,7 @@ import EditCredential from './pages/EditCredential/EditCredential';
 import DepositBankRegex from './pages/DepositBankRegex/DepositBankRegex';
 import Deposits from './pages/Deposits/Deposits';
 import GameConfig from './pages/GameConfig/GameConfig';
+import Games from './pages/Games/Games';
 import ManageDepositBank from './pages/ManageDepositBank/ManageDepositBank';
 import ReferralHistory from './pages/ReferralHistory/ReferralHistory';
 import ReportPage from './pages/ReportPage/ReportPage';
@@ -65,6 +66,7 @@ const AdminLayout = ({ children, role, pathname, onSignOut }: AdminLayoutProps) 
     { key: 'withdrawals', label: 'Withdrawals', href: '/admin/withdrawals/pending', enabled: true },
     { key: 'deposits', label: 'Deposits', href: '/admin/deposits', enabled: role === 'super_admin' },
     { key: 'game-config', label: 'Game Config', href: '/admin/game-config', enabled: role === 'super_admin' },
+    { key: 'games', label: 'Games', href: '/admin/games', enabled: role === 'super_admin' },
     { key: 'banks', label: 'Bank Accounts', href: '/admin/banks', enabled: role === 'super_admin' },
     { key: 'regex', label: 'Bank Regex', href: '/admin/regex', enabled: role === 'super_admin' },
     { key: 'transfers', label: 'Transfers', href: '/admin/transfers', enabled: role === 'super_admin' },
@@ -182,6 +184,7 @@ const App = () => {
   const isUsersRoute = pathname.startsWith('/admin/users');
   const isDepositsRoute = pathname.startsWith('/admin/deposits');
   const isGameConfigRoute = pathname.startsWith('/admin/game-config');
+  const isGamesRoute = pathname.startsWith('/admin/games');
   const isBanksRoute = pathname.startsWith('/admin/banks');
   const isRegexRoute = pathname.startsWith('/admin/regex');
   const isCouponsRoute = pathname === '/admin/coupons';
@@ -490,6 +493,26 @@ const App = () => {
         <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
           <Toaster position="top-right" />
           <GameConfig />
+        </AdminLayout>
+      );
+    }
+
+    if (isGamesRoute) {
+      if (role !== 'super_admin') {
+        return (
+          <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
+            <Toaster position="top-right" />
+            <div className="page-placeholder">
+              <h2>Access denied</h2>
+              <p>Super Admin access only.</p>
+            </div>
+          </AdminLayout>
+        );
+      }
+      return (
+        <AdminLayout role={role} pathname={pathname} onSignOut={handleSignOut}>
+          <Toaster position="top-right" />
+          <Games />
         </AdminLayout>
       );
     }

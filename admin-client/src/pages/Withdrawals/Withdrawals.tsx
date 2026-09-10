@@ -60,6 +60,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   const [actionLoading, setActionLoading] = useState(false);
   const [expandedDeclineId, setExpandedDeclineId] = useState<number | null>(null);
   const declineReasonRef = useRef<HTMLTableCellElement | null>(null);
+  const loadSeq = useRef(0);
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -83,6 +84,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
   );
 
   const loadWithdrawals = async (nextPage = page) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const data = await fetchWithdrawals({
@@ -92,14 +94,18 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
-      setRows(Array.isArray(data.data) ? data.data : []);
+      if (seq !== loadSeq.current) return;
+      if (Array.isArray(data.data)) {
+        setRows(data.data);
+      }
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
+      if (seq !== loadSeq.current) return;
       const message = error instanceof Error ? error.message : 'Failed to load withdrawals';
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -171,6 +177,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
         adminTxNumber: adminTxNumber.trim(),
       });
       toast.success('Withdrawal approved.');
+      setRows((prev) => prev.filter((row) => row.withdrawal_id !== selected.withdrawal_id));
       closeModals();
       loadWithdrawals(page);
     } catch (error) {
@@ -206,6 +213,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
         reasonNote: declineReasonNote.trim(),
       });
       toast.success('Withdrawal declined.');
+      setRows((prev) => prev.filter((row) => row.withdrawal_id !== selected.withdrawal_id));
       closeModals();
       loadWithdrawals(page);
     } catch (error) {
@@ -271,6 +279,7 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
         <table className="withdrawals-table">
           <thead>
             <tr>
+              <th>#</th>
               {columns.map((column) => (
                 <th key={column.key}>{column.label}</th>
               ))}
@@ -280,21 +289,22 @@ const Withdrawals = ({ mode }: { mode: ViewMode }) => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="withdrawals-empty">
+                <td colSpan={columns.length + 2} className="withdrawals-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="withdrawals-empty">
+                <td colSpan={columns.length + 2} className="withdrawals-empty">
                   No withdrawals found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              rows.map((row, index) => {
                 const declinedReasonValue = getDeclinedReason(row);
                 return (
                   <tr key={row.withdrawal_id}>
+                  <td>{index + 1}</td>
                   <td>{row.withdrawal_id}</td>
                   <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                   <td>{row.first_name ?? '-'}</td>

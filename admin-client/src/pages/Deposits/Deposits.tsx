@@ -236,6 +236,7 @@ const Deposits = () => {
         <table className="deposits-table">
           <thead>
             <tr>
+              <th>#</th>
               <th>Deposit ID</th>
               <th>Telegram ID</th>
               <th>First Name</th>
@@ -251,21 +252,22 @@ const Deposits = () => {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="deposits-empty">
+                <td colSpan={11} className="deposits-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="deposits-empty">
+                <td colSpan={11} className="deposits-empty">
                   No deposits found.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              rows.map((row, index) => {
                 const pending = row.status?.toLowerCase() === 'pending';
                 return (
                   <tr key={row.deposit_id}>
+                    <td>{index + 1}</td>
                     <td>{row.deposit_id}</td>
                     <td><TelegramIdCell telegramId={row.telegram_id} onClick={setDetailId} /></td>
                     <td>{row.first_name ?? '-'}</td>

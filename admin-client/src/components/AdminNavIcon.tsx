@@ -61,6 +61,15 @@ export const AdminNavIcon = ({ name }: { name: string }) => {
           <line x1="17" y1="16" x2="23" y2="16" />
         </svg>
       );
+    case 'games':
+      return (
+        <svg {...svgProps}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
     case 'banks':
       return (
         <svg {...svgProps}>

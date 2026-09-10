@@ -1,35 +1,43 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import TelegramIdCell from '../../components/TelegramIdCell';
-import UserDetailsModal from '../../components/UserDetailsModal';
-import { fetchReferralHistory, ReferralHistoryRow } from '../../services/historyService';
+import { fetchGames, GameRow } from '../../services/gamesService';
 
-const ReferralHistory = () => {
-  const [rows, setRows] = useState<ReferralHistoryRow[]>([]);
+const PHASES = ['picking', 'started', 'winner_reveal', 'error', 'maintenance', 'finished'] as const;
+
+const formatNumber = (value: string | number | null) => {
+  if (value === null || value === undefined || value === '') return '-';
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(numeric);
+};
+
+const Games = () => {
+  const [rows, setRows] = useState<GameRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
-  const [rewarded, setRewarded] = useState('');
+  const [phase, setPhase] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [detailId, setDetailId] = useState<number | null>(null);
 
-  const loadReferrals = async (nextPage = page) => {
+  const loadGames = async (nextPage = page) => {
     setLoading(true);
     try {
-      const data = await fetchReferralHistory({
+      const data = await fetchGames({
         page: nextPage,
         search: search.trim() || undefined,
-        rewarded: rewarded || undefined,
+        phase: phase || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
-      setRows(Array.isArray(data.data) ? data.data : []);
+      if (Array.isArray(data.data)) {
+        setRows(data.data);
+      }
       setPage(data.page);
       setTotalPages(data.totalPages);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load referrals';
+      const message = error instanceof Error ? error.message : 'Failed to load games';
       toast.error(message);
     } finally {
       setLoading(false);
@@ -37,15 +45,15 @@ const ReferralHistory = () => {
   };
 
   useEffect(() => {
-    loadReferrals(1);
+    loadGames(1);
   }, []);
 
   return (
     <div className="coupons-page">
       <div className="coupons-header">
         <div>
-          <h1>Referral History</h1>
-          <p className="coupons-subtitle">Track rewarded referrals</p>
+          <h1>Games</h1>
+          <p className="coupons-subtitle">Read-only game rounds</p>
         </div>
       </div>
 
@@ -53,13 +61,26 @@ const ReferralHistory = () => {
         <input
           type="text"
           className="coupons-input"
-          placeholder="Search referrer or referred ID"
+          placeholder="Search game ID, phase, or stake"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') loadReferrals(1);
+            if (event.key === 'Enter') loadGames(1);
           }}
         />
+        <div className="coupons-sort">
+          <label>
+            Phase
+            <select value={phase} onChange={(event) => setPhase(event.target.value)}>
+              <option value="">All</option>
+              {PHASES.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="coupons-date">
           <label>
             From
@@ -78,17 +99,7 @@ const ReferralHistory = () => {
             />
           </label>
         </div>
-        <div className="coupons-sort">
-          <label>
-            Rewarded
-            <select value={rewarded} onChange={(event) => setRewarded(event.target.value)}>
-              <option value="">All</option>
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-          </label>
-        </div>
-        <button type="button" className="secondary-button" onClick={() => loadReferrals(1)} disabled={loading}>
+        <button type="button" className="secondary-button" onClick={() => loadGames(1)} disabled={loading}>
           Apply Filters
         </button>
       </div>
@@ -98,41 +109,41 @@ const ReferralHistory = () => {
           <thead>
             <tr>
               <th>#</th>
-              <th>ID</th>
-              <th>Referrer ID</th>
-              <th>Referred ID</th>
-              <th>Rewarded</th>
-              <th>Reward Amount</th>
-              <th>Created At</th>
+              <th>Game ID</th>
+              <th>Phase</th>
+              <th>Active Players</th>
+              <th>Minimum Players</th>
+              <th>Stake</th>
+              <th>Prize</th>
+              <th>House Profit</th>
+              <th>Real P</th>
             </tr>
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="coupons-empty">
+                <td colSpan={9} className="coupons-empty">
                   Loading...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="coupons-empty">
-                  No referrals found.
+                <td colSpan={9} className="coupons-empty">
+                  No games found.
                 </td>
               </tr>
             ) : (
               rows.map((row, index) => (
-                <tr key={row.referral_id}>
+                <tr key={row.game_id}>
                   <td>{index + 1}</td>
-                  <td>{row.referral_id}</td>
-                  <td><TelegramIdCell telegramId={row.referrer_id} onClick={setDetailId} /></td>
-                  <td><TelegramIdCell telegramId={row.referred_user_id} onClick={setDetailId} /></td>
-                  <td>
-                    <span className={`status-pill ${row.rewarded ? 'active' : 'inactive'}`}>
-                      {row.rewarded ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td>{row.rewarded_amount ?? '-'}</td>
-                  <td>{new Date(row.created_at).toLocaleString()}</td>
+                  <td>{row.game_id}</td>
+                  <td>{row.phase ?? '-'}</td>
+                  <td>{row.active_players ?? '-'}</td>
+                  <td>{row.minimum_player ?? '-'}</td>
+                  <td>{formatNumber(row.stake_amount)}</td>
+                  <td>{formatNumber(row.prize_amount)}</td>
+                  <td>{formatNumber(row.house_profit)}</td>
+                  <td>{row.real_p ?? '-'}</td>
                 </tr>
               ))
             )}
@@ -144,7 +155,7 @@ const ReferralHistory = () => {
         <button
           type="button"
           className="secondary-button"
-          onClick={() => loadReferrals(Math.max(page - 1, 1))}
+          onClick={() => loadGames(Math.max(page - 1, 1))}
           disabled={page <= 1 || loading}
         >
           Previous
@@ -155,15 +166,14 @@ const ReferralHistory = () => {
         <button
           type="button"
           className="secondary-button"
-          onClick={() => loadReferrals(Math.min(page + 1, totalPages))}
+          onClick={() => loadGames(Math.min(page + 1, totalPages))}
           disabled={page >= totalPages || loading}
         >
           Next
         </button>
       </div>
-      <UserDetailsModal telegramId={detailId} open={detailId !== null} onClose={() => setDetailId(null)} />
     </div>
   );
 };
 
-export default ReferralHistory;
+export default Games;
